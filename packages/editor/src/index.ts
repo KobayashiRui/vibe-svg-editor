@@ -1,8 +1,10 @@
+import { getDocumentViewBox } from "@glyphsmith/ast";
 import type {
   Bounds,
   DocumentBackground,
   GeometryDocument,
   GeometryNode,
+  GroupNode,
   InsertPatch,
   LineNode,
   NodeId,
@@ -14,11 +16,17 @@ import type {
   RectNode,
   Segment,
   TextNode,
-  UpdatePatch
+  UpdatePatch,
 } from "@glyphsmith/ast";
 
 export type Tool = "select" | "rect" | "ellipse" | "triangle" | "path" | "text";
-export type PathSegmentMode = "line" | "quadratic" | "cubic" | "arc" | "catmullRom" | "basis";
+export type PathSegmentMode =
+  | "line"
+  | "quadratic"
+  | "cubic"
+  | "arc"
+  | "catmullRom"
+  | "basis";
 
 export type Viewport = {
   x: number;
@@ -28,7 +36,7 @@ export type Viewport = {
 
 export const viewportZoomLimits = {
   min: 0.1,
-  max: 64
+  max: 64,
 } as const;
 
 export type ViewportSize = {
@@ -91,20 +99,205 @@ export type SnapPoint = {
 export const defaultStyle: NodeStyle = {
   fill: "none",
   stroke: "#111827",
-  strokeWidth: 2
+  strokeWidth: 2,
 };
+
+/** Persist interactive geometry with a stable, human-readable precision. */
+export const coordinateDecimalPlaces = 3;
+
+export function roundGeometryDocument(
+  document: GeometryDocument,
+  nodeIds: readonly NodeId[],
+  decimalPlaces = coordinateDecimalPlaces,
+): GeometryDocument {
+  const roundedNodeIds = new Set(nodeIds);
+
+  return {
+    ...document,
+    root: roundGeometryNode(document.root, roundedNodeIds, decimalPlaces),
+  };
+}
+
+function roundGeometryNode(
+  node: GroupNode,
+  nodeIds: ReadonlySet<NodeId>,
+  decimalPlaces: number,
+  roundDescendants?: boolean,
+): GroupNode;
+function roundGeometryNode(
+  node: GeometryNode,
+  nodeIds: ReadonlySet<NodeId>,
+  decimalPlaces: number,
+  roundDescendants?: boolean,
+): GeometryNode;
+function roundGeometryNode(
+  node: GeometryNode,
+  nodeIds: ReadonlySet<NodeId>,
+  decimalPlaces: number,
+  roundDescendants = false,
+): GeometryNode {
+  const shouldRound = roundDescendants || nodeIds.has(node.id);
+
+  if (node.type === "group") {
+    return {
+      ...node,
+      children: node.children.map((child) =>
+        roundGeometryNode(child, nodeIds, decimalPlaces, shouldRound),
+      ),
+    } satisfies GroupNode;
+  }
+
+  if (!shouldRound) {
+    return node;
+  }
+
+  switch (node.type) {
+    case "rect":
+      return {
+        ...node,
+        x: roundCoordinate(node.x, decimalPlaces),
+        y: roundCoordinate(node.y, decimalPlaces),
+        width: roundCoordinate(node.width, decimalPlaces),
+        height: roundCoordinate(node.height, decimalPlaces),
+        ...(node.rx === undefined
+          ? {}
+          : { rx: roundCoordinate(node.rx, decimalPlaces) }),
+        ...(node.ry === undefined
+          ? {}
+          : { ry: roundCoordinate(node.ry, decimalPlaces) }),
+      };
+    case "circle":
+      return {
+        ...node,
+        cx: roundCoordinate(node.cx, decimalPlaces),
+        cy: roundCoordinate(node.cy, decimalPlaces),
+        r: roundCoordinate(node.r, decimalPlaces),
+      };
+    case "ellipse":
+      return {
+        ...node,
+        cx: roundCoordinate(node.cx, decimalPlaces),
+        cy: roundCoordinate(node.cy, decimalPlaces),
+        rx: roundCoordinate(node.rx, decimalPlaces),
+        ry: roundCoordinate(node.ry, decimalPlaces),
+      };
+    case "line":
+      return {
+        ...node,
+        x1: roundCoordinate(node.x1, decimalPlaces),
+        y1: roundCoordinate(node.y1, decimalPlaces),
+        x2: roundCoordinate(node.x2, decimalPlaces),
+        y2: roundCoordinate(node.y2, decimalPlaces),
+      };
+    case "polygon":
+    case "polyline":
+      return {
+        ...node,
+        points: node.points.map((point) => roundPoint(point, decimalPlaces)),
+      };
+    case "path":
+      return {
+        ...node,
+        start: roundPoint(node.start, decimalPlaces),
+        segments: node.segments.map((segment) =>
+          roundSegment(segment, decimalPlaces),
+        ),
+        ...(node.spline
+          ? {
+              spline: {
+                ...node.spline,
+                points: node.spline.points.map((point) =>
+                  roundPoint(point, decimalPlaces),
+                ),
+              },
+            }
+          : {}),
+      };
+    case "text":
+      return {
+        ...node,
+        x: roundCoordinate(node.x, decimalPlaces),
+        y: roundCoordinate(node.y, decimalPlaces),
+        ...(node.runs
+          ? {
+              runs: node.runs.map((run) => ({
+                ...run,
+                ...(run.dx === undefined
+                  ? {}
+                  : { dx: roundCoordinate(run.dx, decimalPlaces) }),
+                ...(run.dy === undefined
+                  ? {}
+                  : { dy: roundCoordinate(run.dy, decimalPlaces) }),
+                ...(run.x === undefined
+                  ? {}
+                  : { x: roundCoordinate(run.x, decimalPlaces) }),
+                ...(run.y === undefined
+                  ? {}
+                  : { y: roundCoordinate(run.y, decimalPlaces) }),
+              })),
+            }
+          : {}),
+      };
+  }
+}
+
+function roundSegment(segment: Segment, decimalPlaces: number): Segment {
+  switch (segment.type) {
+    case "line":
+      return { ...segment, to: roundPoint(segment.to, decimalPlaces) };
+    case "quadratic":
+      return {
+        ...segment,
+        control: roundPoint(segment.control, decimalPlaces),
+        to: roundPoint(segment.to, decimalPlaces),
+      };
+    case "cubic":
+      return {
+        ...segment,
+        control1: roundPoint(segment.control1, decimalPlaces),
+        control2: roundPoint(segment.control2, decimalPlaces),
+        to: roundPoint(segment.to, decimalPlaces),
+      };
+    case "arc":
+      return {
+        ...segment,
+        rx: roundCoordinate(segment.rx, decimalPlaces),
+        ry: roundCoordinate(segment.ry, decimalPlaces),
+        xAxisRotation: roundCoordinate(segment.xAxisRotation, decimalPlaces),
+        to: roundPoint(segment.to, decimalPlaces),
+      };
+  }
+}
+
+function roundPoint(point: Point, decimalPlaces: number): Point {
+  return {
+    x: roundCoordinate(point.x, decimalPlaces),
+    y: roundCoordinate(point.y, decimalPlaces),
+  };
+}
+
+function roundCoordinate(value: number, decimalPlaces: number): number {
+  if (!Number.isFinite(value)) {
+    return value;
+  }
+
+  const factor = 10 ** Math.max(0, decimalPlaces);
+  const rounded = Math.round(value * factor) / factor;
+
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
 
 export function screenToWorld(point: Point, viewport: Viewport): Point {
   return {
     x: (point.x - viewport.x) / viewport.zoom,
-    y: (point.y - viewport.y) / viewport.zoom
+    y: (point.y - viewport.y) / viewport.zoom,
   };
 }
 
 export function worldToScreen(point: Point, viewport: Viewport): Point {
   return {
     x: point.x * viewport.zoom + viewport.x,
-    y: point.y * viewport.zoom + viewport.y
+    y: point.y * viewport.zoom + viewport.y,
   };
 }
 
@@ -112,14 +305,14 @@ export function panViewport(viewport: Viewport, delta: Point): Viewport {
   return {
     ...viewport,
     x: viewport.x + delta.x,
-    y: viewport.y + delta.y
+    y: viewport.y + delta.y,
   };
 }
 
 export function zoomViewportAtPoint(
   viewport: Viewport,
   screenPoint: Point,
-  nextZoom: number
+  nextZoom: number,
 ): Viewport {
   const zoom = clamp(nextZoom, viewportZoomLimits.min, viewportZoomLimits.max);
   const worldPoint = screenToWorld(screenPoint, viewport);
@@ -127,27 +320,28 @@ export function zoomViewportAtPoint(
   return {
     x: screenPoint.x - worldPoint.x * zoom,
     y: screenPoint.y - worldPoint.y * zoom,
-    zoom
+    zoom,
   };
 }
 
 export function fitViewportToDocument(
   document: GeometryDocument,
   viewportSize: ViewportSize,
-  padding = 48
+  padding = 48,
 ): Viewport {
+  const viewBox = getDocumentViewBox(document);
   const availableWidth = Math.max(1, viewportSize.width - padding * 2);
   const availableHeight = Math.max(1, viewportSize.height - padding * 2);
   const zoom = clamp(
-    Math.min(availableWidth / document.width, availableHeight / document.height),
+    Math.min(availableWidth / viewBox.width, availableHeight / viewBox.height),
     viewportZoomLimits.min,
-    viewportZoomLimits.max
+    viewportZoomLimits.max,
   );
 
   return {
-    x: (viewportSize.width - document.width * zoom) / 2,
-    y: (viewportSize.height - document.height * zoom) / 2,
-    zoom
+    x: (viewportSize.width - viewBox.width * zoom) / 2 - viewBox.x * zoom,
+    y: (viewportSize.height - viewBox.height * zoom) / 2 - viewBox.y * zoom,
+    zoom,
   };
 }
 
@@ -155,7 +349,7 @@ export function renderDocument(
   context: CanvasRenderingContext2D,
   document: GeometryDocument,
   viewport: Viewport,
-  options: RenderOptions = {}
+  options: RenderOptions = {},
 ): void {
   const canvas = context.canvas;
   const pixelRatio = options.pixelRatio ?? 1;
@@ -176,7 +370,7 @@ export function renderDocument(
     0,
     viewport.zoom * pixelRatio,
     viewport.x * pixelRatio,
-    viewport.y * pixelRatio
+    viewport.y * pixelRatio,
   );
   context.setLineDash([]);
   drawDocumentBackground(context, document);
@@ -198,16 +392,33 @@ export function renderDocument(
   }
 
   if (options.showEditHandles) {
-    drawPathControlGuides(context, document, options.selectedNodeIds ?? [], viewport, pixelRatio);
-    drawTextAnchorGuides(context, document, options.selectedNodeIds ?? [], viewport, pixelRatio);
-    drawEditHandles(context, getEditHandles(document, options.selectedNodeIds ?? []), viewport, pixelRatio);
+    drawPathControlGuides(
+      context,
+      document,
+      options.selectedNodeIds ?? [],
+      viewport,
+      pixelRatio,
+    );
+    drawTextAnchorGuides(
+      context,
+      document,
+      options.selectedNodeIds ?? [],
+      viewport,
+      pixelRatio,
+    );
+    drawEditHandles(
+      context,
+      getEditHandles(document, options.selectedNodeIds ?? []),
+      viewport,
+      pixelRatio,
+    );
   }
 }
 
 export function hitTest(
   document: GeometryDocument,
   point: Point,
-  options: HitTestOptions = {}
+  options: HitTestOptions = {},
 ): NodeId | undefined {
   const tolerance = options.tolerance ?? 6;
 
@@ -241,8 +452,8 @@ export function createRectInsertPatch(input: {
       type: "rect",
       name: "Rectangle",
       ...bounds,
-      style: input.style ?? defaultStyle
-    }
+      style: input.style ?? defaultStyle,
+    },
   };
 }
 
@@ -266,8 +477,8 @@ export function createEllipseInsertPatch(input: {
       cy: bounds.y + bounds.height / 2,
       rx: bounds.width / 2,
       ry: bounds.height / 2,
-      style: input.style ?? defaultStyle
-    }
+      style: input.style ?? defaultStyle,
+    },
   };
 }
 
@@ -286,8 +497,8 @@ export function createTriangleInsertPatch(input: {
       type: "polygon",
       name: "Triangle",
       points: trianglePointsFromBounds(input.start, input.end),
-      style: input.style ?? defaultStyle
-    }
+      style: input.style ?? defaultStyle,
+    },
   };
 }
 
@@ -297,7 +508,7 @@ export function trianglePointsFromBounds(start: Point, end: Point): Point[] {
   return [
     { x: bounds.x + bounds.width / 2, y: bounds.y },
     { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
-    { x: bounds.x, y: bounds.y + bounds.height }
+    { x: bounds.x, y: bounds.y + bounds.height },
   ];
 }
 
@@ -319,8 +530,8 @@ export function createLineInsertPatch(input: {
       y1: input.start.y,
       x2: input.end.x,
       y2: input.end.y,
-      style: input.style ?? defaultStyle
-    }
+      style: input.style ?? defaultStyle,
+    },
   };
 }
 
@@ -334,7 +545,9 @@ export function createLinePathInsertPatch(input: {
 }): InsertPatch {
   const segmentMode = input.segmentMode ?? "line";
   const basisGeometry =
-    segmentMode === "basis" ? createBasisSplinePathGeometry([input.start, input.end]) : undefined;
+    segmentMode === "basis"
+      ? createBasisSplinePathGeometry([input.start, input.end])
+      : undefined;
 
   return {
     op: "insert",
@@ -345,10 +558,12 @@ export function createLinePathInsertPatch(input: {
       name: "Path",
       start: basisGeometry?.start ?? input.start,
       closed: false,
-      segments: basisGeometry?.segments ?? [createSegment(input.start, input.end, segmentMode)],
+      segments: basisGeometry?.segments ?? [
+        createSegment(input.start, input.end, segmentMode),
+      ],
       spline: basisGeometry?.spline,
-      style: input.style ?? defaultStyle
-    }
+      style: input.style ?? defaultStyle,
+    },
   };
 }
 
@@ -356,7 +571,7 @@ export function createAppendPathSegmentPatch(
   document: GeometryDocument,
   nodeId: NodeId,
   end: Point,
-  segmentMode: PathSegmentMode
+  segmentMode: PathSegmentMode,
 ): UpdatePatch | undefined {
   const node = findNodeInTree(document.root, nodeId);
 
@@ -365,12 +580,15 @@ export function createAppendPathSegmentPatch(
   }
 
   if (segmentMode === "basis") {
-    const basisGeometry = createBasisSplinePathGeometry([...getBasisControlPoints(node), end]);
+    const basisGeometry = createBasisSplinePathGeometry([
+      ...getBasisControlPoints(node),
+      end,
+    ]);
 
     return {
       op: "update",
       target: nodeId,
-      changes: basisGeometry
+      changes: basisGeometry,
     };
   }
 
@@ -380,21 +598,24 @@ export function createAppendPathSegmentPatch(
   const segments =
     segmentMode === "catmullRom"
       ? appendCatmullRomSegment(node, end)
-      : [...node.segments, createSegment(start, end, segmentMode, previous, tangent)];
+      : [
+          ...node.segments,
+          createSegment(start, end, segmentMode, previous, tangent),
+        ];
 
   return {
     op: "update",
     target: nodeId,
     changes: {
-      segments
-    }
+      segments,
+    },
   };
 }
 
 export function createAppendLineSegmentPatch(
   document: GeometryDocument,
   nodeId: NodeId,
-  end: Point
+  end: Point,
 ): UpdatePatch | undefined {
   return createAppendPathSegmentPatch(document, nodeId, end, "line");
 }
@@ -402,7 +623,7 @@ export function createAppendLineSegmentPatch(
 export function createPathClosedUpdatePatch(
   document: GeometryDocument,
   nodeId: NodeId,
-  closed: boolean
+  closed: boolean,
 ): UpdatePatch | undefined {
   const node = findNodeInTree(document.root, nodeId);
 
@@ -414,16 +635,22 @@ export function createPathClosedUpdatePatch(
     op: "update",
     target: nodeId,
     changes: {
-      closed
-    }
+      closed,
+    },
   };
 }
 
-export function getNodeBounds(document: GeometryDocument, nodeId: NodeId): Bounds | undefined {
+export function getNodeBounds(
+  document: GeometryDocument,
+  nodeId: NodeId,
+): Bounds | undefined {
   return getNodeBoundsInTree(document.root, nodeId);
 }
 
-export function getEditHandles(document: GeometryDocument, nodeIds: NodeId[]): EditHandle[] {
+export function getEditHandles(
+  document: GeometryDocument,
+  nodeIds: NodeId[],
+): EditHandle[] {
   return nodeIds.flatMap((nodeId) => {
     const node = findNodeInTree(document.root, nodeId);
 
@@ -439,7 +666,7 @@ export function hitTestEditHandle(
   document: GeometryDocument,
   nodeIds: NodeId[],
   point: Point,
-  tolerance: number
+  tolerance: number,
 ): EditHandle | undefined {
   const handles = getEditHandles(document, nodeIds);
 
@@ -461,7 +688,7 @@ export function getSnapPoints(document: GeometryDocument): SnapPoint[] {
 export function snapPointToExistingVertex(
   document: GeometryDocument,
   point: Point,
-  tolerance: number
+  tolerance: number,
 ): SnapPoint | undefined {
   let nearest: SnapPoint | undefined;
   let nearestDistance = tolerance;
@@ -481,7 +708,7 @@ export function snapPointToExistingVertex(
 export function createEditHandleUpdatePatch(
   document: GeometryDocument,
   handle: EditHandle,
-  point: Point
+  point: Point,
 ): UpdatePatch | undefined {
   const node = findNodeInTree(document.root, handle.nodeId);
 
@@ -524,7 +751,7 @@ export function normalizeBounds(start: Point, end: Point): Bounds {
     x,
     y,
     width: Math.abs(end.x - start.x),
-    height: Math.abs(end.y - start.y)
+    height: Math.abs(end.y - start.y),
   };
 }
 
@@ -532,22 +759,28 @@ function drawPageBorder(
   context: CanvasRenderingContext2D,
   document: GeometryDocument,
   viewport: Viewport,
-  pixelRatio: number
+  pixelRatio: number,
 ): void {
+  const viewBox = getDocumentViewBox(document);
+
   context.save();
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   context.strokeStyle = "#d1d5db";
   context.lineWidth = 1;
   context.strokeRect(
-    viewport.x,
-    viewport.y,
-    document.width * viewport.zoom,
-    document.height * viewport.zoom
+    viewport.x + viewBox.x * viewport.zoom,
+    viewport.y + viewBox.y * viewport.zoom,
+    viewBox.width * viewport.zoom,
+    viewBox.height * viewport.zoom,
   );
   context.restore();
 }
 
-function drawDocumentBackground(context: CanvasRenderingContext2D, document: GeometryDocument): void {
+function drawDocumentBackground(
+  context: CanvasRenderingContext2D,
+  document: GeometryDocument,
+): void {
+  const viewBox = getDocumentViewBox(document);
   const background = document.background ?? { type: "solid", color: "#ffffff" };
 
   if (background.type === "checkerboard") {
@@ -556,30 +789,41 @@ function drawDocumentBackground(context: CanvasRenderingContext2D, document: Geo
   }
 
   context.fillStyle = background.color;
-  context.fillRect(0, 0, document.width, document.height);
+  context.fillRect(viewBox.x, viewBox.y, viewBox.width, viewBox.height);
 }
 
 function drawCheckerboardBackground(
   context: CanvasRenderingContext2D,
   document: GeometryDocument,
-  background: Extract<DocumentBackground, { type: "checkerboard" }>
+  background: Extract<DocumentBackground, { type: "checkerboard" }>,
 ): void {
+  const viewBox = getDocumentViewBox(document);
   const size = Math.max(1, background.size ?? 32);
   const light = background.light ?? "#f8fafc";
   const dark = background.dark ?? "#cfd8df";
 
   context.fillStyle = light;
-  context.fillRect(0, 0, document.width, document.height);
+  context.fillRect(viewBox.x, viewBox.y, viewBox.width, viewBox.height);
 
   context.fillStyle = dark;
 
-  for (let y = 0; y < document.height; y += size) {
-    for (let x = 0; x < document.width; x += size) {
-      if ((Math.floor(x / size) + Math.floor(y / size)) % 2 === 0) {
+  for (let y = viewBox.y; y < viewBox.y + viewBox.height; y += size) {
+    for (let x = viewBox.x; x < viewBox.x + viewBox.width; x += size) {
+      if (
+        (Math.floor((x - viewBox.x) / size) +
+          Math.floor((y - viewBox.y) / size)) %
+          2 ===
+        0
+      ) {
         continue;
       }
 
-      context.fillRect(x, y, Math.min(size, document.width - x), Math.min(size, document.height - y));
+      context.fillRect(
+        x,
+        y,
+        Math.min(size, viewBox.x + viewBox.width - x),
+        Math.min(size, viewBox.y + viewBox.height - y),
+      );
     }
   }
 }
@@ -677,20 +921,28 @@ function textStartY(
   node: TextNode,
   fontSize: number,
   lineHeight: number,
-  lineCount: number
+  lineCount: number,
 ): number {
-  if (node.dominantBaseline === "middle" || node.dominantBaseline === "central") {
+  if (
+    node.dominantBaseline === "middle" ||
+    node.dominantBaseline === "central"
+  ) {
     return node.y - ((lineCount - 1) * lineHeight) / 2;
   }
 
-  if (node.dominantBaseline === "bottom" || node.dominantBaseline === "ideographic") {
+  if (
+    node.dominantBaseline === "bottom" ||
+    node.dominantBaseline === "ideographic"
+  ) {
     return node.y - (lineCount - 1) * lineHeight;
   }
 
   return node.y;
 }
 
-function canvasTextAlign(value: TextNode["textAnchor"] | undefined): CanvasTextAlign {
+function canvasTextAlign(
+  value: TextNode["textAnchor"] | undefined,
+): CanvasTextAlign {
   if (value === "middle") {
     return "center";
   }
@@ -724,10 +976,7 @@ function drawRect(context: CanvasRenderingContext2D, node: RectNode): void {
   const ry = node.ry ?? node.rx ?? 0;
 
   if (rx > 0 || ry > 0) {
-    context.roundRect(node.x, node.y, node.width, node.height, [
-      rx,
-      ry
-    ]);
+    context.roundRect(node.x, node.y, node.width, node.height, [rx, ry]);
   } else {
     context.rect(node.x, node.y, node.width, node.height);
   }
@@ -739,7 +988,7 @@ function drawPoints(
   context: CanvasRenderingContext2D,
   points: Point[],
   closed: boolean,
-  style: NodeStyle | undefined
+  style: NodeStyle | undefined,
 ): void {
   if (points.length === 0 || !points[0]) {
     return;
@@ -771,7 +1020,12 @@ function drawPath(context: CanvasRenderingContext2D, node: PathNode): void {
         context.lineTo(segment.to.x, segment.to.y);
         break;
       case "quadratic":
-        context.quadraticCurveTo(segment.control.x, segment.control.y, segment.to.x, segment.to.y);
+        context.quadraticCurveTo(
+          segment.control.x,
+          segment.control.y,
+          segment.to.x,
+          segment.to.y,
+        );
         break;
       case "cubic":
         context.bezierCurveTo(
@@ -780,7 +1034,7 @@ function drawPath(context: CanvasRenderingContext2D, node: PathNode): void {
           segment.control2.x,
           segment.control2.y,
           segment.to.x,
-          segment.to.y
+          segment.to.y,
         );
         break;
       case "arc":
@@ -799,7 +1053,7 @@ function drawPath(context: CanvasRenderingContext2D, node: PathNode): void {
 export function drawArcSegment(
   context: CanvasRenderingContext2D,
   start: Point,
-  segment: Extract<Segment, { type: "arc" }>
+  segment: Extract<Segment, { type: "arc" }>,
 ): void {
   const parameters = arcCenterParameters(start, segment);
 
@@ -816,22 +1070,24 @@ export function drawArcSegment(
     parameters.phi,
     parameters.startAngle,
     parameters.startAngle + parameters.deltaAngle,
-    !segment.sweep
+    !segment.sweep,
   );
 }
 
 function arcCenterParameters(
   start: Point,
-  segment: Extract<Segment, { type: "arc" }>
-): {
-  cx: number;
-  cy: number;
-  deltaAngle: number;
-  phi: number;
-  rx: number;
-  ry: number;
-  startAngle: number;
-} | undefined {
+  segment: Extract<Segment, { type: "arc" }>,
+):
+  | {
+      cx: number;
+      cy: number;
+      deltaAngle: number;
+      phi: number;
+      rx: number;
+      ry: number;
+      startAngle: number;
+    }
+  | undefined {
   const rx = Math.max(Math.abs(segment.rx), 0.001);
   const ry = Math.max(Math.abs(segment.ry), 0.001);
   const phi = (segment.xAxisRotation * Math.PI) / 180;
@@ -843,7 +1099,9 @@ function arcCenterParameters(
   let y1p = -sinPhi * dx + cosPhi * dy;
   let adjustedRx = rx;
   let adjustedRy = ry;
-  const lambda = (x1p * x1p) / (adjustedRx * adjustedRx) + (y1p * y1p) / (adjustedRy * adjustedRy);
+  const lambda =
+    (x1p * x1p) / (adjustedRx * adjustedRx) +
+    (y1p * y1p) / (adjustedRy * adjustedRy);
 
   if (lambda > 1) {
     const scale = Math.sqrt(lambda);
@@ -856,7 +1114,8 @@ function arcCenterParameters(
     adjustedRx * adjustedRx * adjustedRy * adjustedRy -
     adjustedRx * adjustedRx * y1p * y1p -
     adjustedRy * adjustedRy * x1p * x1p;
-  const denominator = adjustedRx * adjustedRx * y1p * y1p + adjustedRy * adjustedRy * x1p * x1p;
+  const denominator =
+    adjustedRx * adjustedRx * y1p * y1p + adjustedRy * adjustedRy * x1p * x1p;
 
   if (denominator === 0) {
     return undefined;
@@ -865,16 +1124,19 @@ function arcCenterParameters(
   const coef = sign * Math.sqrt(Math.max(0, numerator / denominator));
   const cxp = (coef * adjustedRx * y1p) / adjustedRy;
   const cyp = (-coef * adjustedRy * x1p) / adjustedRx;
-  const cx =
-    cosPhi * cxp - sinPhi * cyp + (start.x + segment.to.x) / 2;
-  const cy =
-    sinPhi * cxp + cosPhi * cyp + (start.y + segment.to.y) / 2;
-  const startAngle = vectorAngle(1, 0, (x1p - cxp) / adjustedRx, (y1p - cyp) / adjustedRy);
+  const cx = cosPhi * cxp - sinPhi * cyp + (start.x + segment.to.x) / 2;
+  const cy = sinPhi * cxp + cosPhi * cyp + (start.y + segment.to.y) / 2;
+  const startAngle = vectorAngle(
+    1,
+    0,
+    (x1p - cxp) / adjustedRx,
+    (y1p - cyp) / adjustedRy,
+  );
   let deltaAngle = vectorAngle(
     (x1p - cxp) / adjustedRx,
     (y1p - cyp) / adjustedRy,
     (-x1p - cxp) / adjustedRx,
-    (-y1p - cyp) / adjustedRy
+    (-y1p - cyp) / adjustedRy,
   );
 
   if (!segment.sweep && deltaAngle > 0) {
@@ -892,13 +1154,13 @@ function arcCenterParameters(
     phi,
     rx: adjustedRx,
     ry: adjustedRy,
-    startAngle
+    startAngle,
   };
 }
 
 function pointOnArc(
   parameters: NonNullable<ReturnType<typeof arcCenterParameters>>,
-  amount: number
+  amount: number,
 ): Point {
   const angle = parameters.startAngle + parameters.deltaAngle * amount;
   const cosPhi = Math.cos(parameters.phi);
@@ -908,7 +1170,7 @@ function pointOnArc(
 
   return {
     x: parameters.cx + x * cosPhi - y * sinPhi,
-    y: parameters.cy + x * sinPhi + y * cosPhi
+    y: parameters.cy + x * sinPhi + y * cosPhi,
   };
 }
 
@@ -920,9 +1182,14 @@ function vectorAngle(ux: number, uy: number, vx: number, vy: number): number {
   return sign * Math.acos(clamp(dot / length, -1, 1));
 }
 
-function applyStyle(context: CanvasRenderingContext2D, style: NodeStyle | undefined): void {
-  context.fillStyle = style?.fill && style.fill !== "none" ? style.fill : "transparent";
-  context.strokeStyle = style?.stroke && style.stroke !== "none" ? style.stroke : "transparent";
+function applyStyle(
+  context: CanvasRenderingContext2D,
+  style: NodeStyle | undefined,
+): void {
+  context.fillStyle =
+    style?.fill && style.fill !== "none" ? style.fill : "transparent";
+  context.strokeStyle =
+    style?.stroke && style.stroke !== "none" ? style.stroke : "transparent";
   context.lineWidth = style?.strokeWidth ?? 2;
   context.lineCap = canvasLineCap(style?.strokeLinecap);
   context.lineJoin = canvasLineJoin(style?.strokeLinejoin);
@@ -932,7 +1199,9 @@ function applyStyle(context: CanvasRenderingContext2D, style: NodeStyle | undefi
   context.globalAlpha = style?.opacity ?? 1;
 }
 
-function canvasLineCap(value: NodeStyle["strokeLinecap"] | undefined): CanvasLineCap {
+function canvasLineCap(
+  value: NodeStyle["strokeLinecap"] | undefined,
+): CanvasLineCap {
   if (value === "round" || value === "square") {
     return value;
   }
@@ -940,7 +1209,9 @@ function canvasLineCap(value: NodeStyle["strokeLinecap"] | undefined): CanvasLin
   return "butt";
 }
 
-function canvasLineJoin(value: NodeStyle["strokeLinejoin"] | undefined): CanvasLineJoin {
+function canvasLineJoin(
+  value: NodeStyle["strokeLinejoin"] | undefined,
+): CanvasLineJoin {
   if (value === "bevel" || value === "round") {
     return value;
   }
@@ -963,7 +1234,10 @@ function parseStrokeDasharray(value: string | undefined): number[] {
   return dash.some((part) => part > 0) ? dash : [];
 }
 
-function paintCurrentPath(context: CanvasRenderingContext2D, style: NodeStyle | undefined): void {
+function paintCurrentPath(
+  context: CanvasRenderingContext2D,
+  style: NodeStyle | undefined,
+): void {
   if (style?.fill && style.fill !== "none") {
     context.fill();
   }
@@ -977,15 +1251,15 @@ function drawSelection(
   context: CanvasRenderingContext2D,
   bounds: Bounds,
   viewport: Viewport,
-  pixelRatio: number
+  pixelRatio: number,
 ): void {
   const topLeft = worldToScreen({ x: bounds.x, y: bounds.y }, viewport);
   const bottomRight = worldToScreen(
     {
       x: bounds.x + bounds.width,
-      y: bounds.y + bounds.height
+      y: bounds.y + bounds.height,
     },
-    viewport
+    viewport,
   );
 
   context.save();
@@ -997,7 +1271,7 @@ function drawSelection(
     topLeft.x,
     topLeft.y,
     bottomRight.x - topLeft.x,
-    bottomRight.y - topLeft.y
+    bottomRight.y - topLeft.y,
   );
 
   context.restore();
@@ -1007,7 +1281,7 @@ function drawEditHandles(
   context: CanvasRenderingContext2D,
   handles: EditHandle[],
   viewport: Viewport,
-  pixelRatio: number
+  pixelRatio: number,
 ): void {
   context.save();
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
@@ -1016,8 +1290,12 @@ function drawEditHandles(
   for (const handle of handles) {
     const screenPoint = worldToScreen(handle.point, viewport);
 
-    context.fillStyle = isPathControlHandleKind(handle.kind) ? "#fecdd3" : "#60a5fa";
-    context.strokeStyle = isPathControlHandleKind(handle.kind) ? "#ef4444" : "#0f172a";
+    context.fillStyle = isPathControlHandleKind(handle.kind)
+      ? "#fecdd3"
+      : "#60a5fa";
+    context.strokeStyle = isPathControlHandleKind(handle.kind)
+      ? "#ef4444"
+      : "#0f172a";
     context.beginPath();
     context.rect(screenPoint.x - 4, screenPoint.y - 4, 8, 8);
     context.fill();
@@ -1041,7 +1319,7 @@ function drawPathControlGuides(
   document: GeometryDocument,
   nodeIds: NodeId[],
   viewport: Viewport,
-  pixelRatio: number
+  pixelRatio: number,
 ): void {
   context.save();
   context.setTransform(
@@ -1050,7 +1328,7 @@ function drawPathControlGuides(
     0,
     viewport.zoom * pixelRatio,
     viewport.x * pixelRatio,
-    viewport.y * pixelRatio
+    viewport.y * pixelRatio,
   );
   context.strokeStyle = "#fb7185";
   context.lineWidth = 1 / viewport.zoom;
@@ -1087,14 +1365,21 @@ function drawPathControlGuides(
   context.restore();
 }
 
-function drawGuideLine(context: CanvasRenderingContext2D, start: Point, end: Point): void {
+function drawGuideLine(
+  context: CanvasRenderingContext2D,
+  start: Point,
+  end: Point,
+): void {
   context.beginPath();
   context.moveTo(start.x, start.y);
   context.lineTo(end.x, end.y);
   context.stroke();
 }
 
-function drawBasisControlPolygon(context: CanvasRenderingContext2D, points: Point[]): void {
+function drawBasisControlPolygon(
+  context: CanvasRenderingContext2D,
+  points: Point[],
+): void {
   for (let index = 0; index < points.length - 1; index += 1) {
     const start = points[index];
     const end = points[index + 1];
@@ -1110,7 +1395,7 @@ function drawTextAnchorGuides(
   document: GeometryDocument,
   nodeIds: NodeId[],
   viewport: Viewport,
-  pixelRatio: number
+  pixelRatio: number,
 ): void {
   context.save();
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
@@ -1126,7 +1411,10 @@ function drawTextAnchorGuides(
     const bounds = boundsForTextNode(node);
     const anchor = worldToScreen({ x: node.x, y: node.y }, viewport);
     const guideStart = worldToScreen({ x: bounds.x, y: node.y }, viewport);
-    const guideEnd = worldToScreen({ x: bounds.x + bounds.width, y: node.y }, viewport);
+    const guideEnd = worldToScreen(
+      { x: bounds.x + bounds.width, y: node.y },
+      viewport,
+    );
 
     context.strokeStyle = "#f59e0b";
     context.setLineDash([3, 3]);
@@ -1157,7 +1445,7 @@ function drawTextAnchorGuides(
 function hitTestNode(
   node: GeometryNode | undefined,
   point: Point,
-  tolerance: number
+  tolerance: number,
 ): NodeId | undefined {
   if (!node || node.visible === false) {
     return undefined;
@@ -1183,29 +1471,47 @@ function hitTestNode(
   return undefined;
 }
 
-function isPointNearNode(node: GeometryNode, point: Point, tolerance: number): boolean {
+function isPointNearNode(
+  node: GeometryNode,
+  point: Point,
+  tolerance: number,
+): boolean {
   const outlineTolerance = strokeHitTolerance(node, tolerance);
 
   switch (node.type) {
     case "rect":
-      return hasVisibleFill(node) ? isPointInsideBounds(point, node) : isPointNearBounds(point, node, outlineTolerance);
+      return hasVisibleFill(node)
+        ? isPointInsideBounds(point, node)
+        : isPointNearBounds(point, node, outlineTolerance);
     case "circle":
       return hasVisibleFill(node)
         ? distance(point, { x: node.cx, y: node.cy }) <= node.r
-        : Math.abs(distance(point, { x: node.cx, y: node.cy }) - node.r) <= outlineTolerance;
+        : Math.abs(distance(point, { x: node.cx, y: node.cy }) - node.r) <=
+            outlineTolerance;
     case "ellipse":
-      return hasVisibleFill(node) ? isPointInsideEllipse(point, node) : isPointNearEllipse(point, node, outlineTolerance);
+      return hasVisibleFill(node)
+        ? isPointInsideEllipse(point, node)
+        : isPointNearEllipse(point, node, outlineTolerance);
     case "line":
-      return distanceToSegment(point, { x: node.x1, y: node.y1 }, { x: node.x2, y: node.y2 }) <= outlineTolerance;
+      return (
+        distanceToSegment(
+          point,
+          { x: node.x1, y: node.y1 },
+          { x: node.x2, y: node.y2 },
+        ) <= outlineTolerance
+      );
     case "polygon":
       return hasVisibleFill(node)
-        ? isPointInsidePolygon(point, node.points) || isPointNearPolyline(point, node.points, true, outlineTolerance)
+        ? isPointInsidePolygon(point, node.points) ||
+            isPointNearPolyline(point, node.points, true, outlineTolerance)
         : isPointNearPolyline(point, node.points, true, outlineTolerance);
     case "polyline":
       return isPointNearPolyline(point, node.points, false, outlineTolerance);
     case "path":
       return (
-        (hasVisibleFill(node) && node.closed && isPointInsidePolygon(point, pathRenderPoints(node))) ||
+        (hasVisibleFill(node) &&
+          node.closed &&
+          isPointInsidePolygon(point, pathRenderPoints(node))) ||
         isPointNearPath(point, node, outlineTolerance)
       );
     case "text": {
@@ -1234,16 +1540,20 @@ function strokeHitTolerance(node: GeometryNode, tolerance: number): number {
     return tolerance;
   }
 
-  const strokeWidth = node.type === "text"
-    ? node.style?.strokeWidth ?? node.strokeWidth ?? defaultStyle.strokeWidth ?? 0
-    : node.style?.strokeWidth ?? defaultStyle.strokeWidth ?? 0;
+  const strokeWidth =
+    node.type === "text"
+      ? (node.style?.strokeWidth ??
+        node.strokeWidth ??
+        defaultStyle.strokeWidth ??
+        0)
+      : (node.style?.strokeWidth ?? defaultStyle.strokeWidth ?? 0);
 
   return tolerance + Math.max(0, strokeWidth / 2);
 }
 
 function isPointInsideEllipse(
   point: Point,
-  ellipse: Extract<GeometryNode, { type: "ellipse" }>
+  ellipse: Extract<GeometryNode, { type: "ellipse" }>,
 ): boolean {
   if (ellipse.rx <= 0 || ellipse.ry <= 0) {
     return false;
@@ -1258,16 +1568,19 @@ function isPointInsideEllipse(
 function isPointNearEllipse(
   point: Point,
   ellipse: Extract<GeometryNode, { type: "ellipse" }>,
-  tolerance: number
+  tolerance: number,
 ): boolean {
   if (ellipse.rx <= 0 || ellipse.ry <= 0) {
     return false;
   }
 
-  const angle = Math.atan2((point.y - ellipse.cy) / ellipse.ry, (point.x - ellipse.cx) / ellipse.rx);
+  const angle = Math.atan2(
+    (point.y - ellipse.cy) / ellipse.ry,
+    (point.x - ellipse.cx) / ellipse.rx,
+  );
   const edgePoint = {
     x: ellipse.cx + Math.cos(angle) * ellipse.rx,
-    y: ellipse.cy + Math.sin(angle) * ellipse.ry
+    y: ellipse.cy + Math.sin(angle) * ellipse.ry,
   };
 
   return distance(point, edgePoint) <= tolerance;
@@ -1276,7 +1589,11 @@ function isPointNearEllipse(
 function isPointInsidePolygon(point: Point, polygon: Point[]): boolean {
   let inside = false;
 
-  for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
+  for (
+    let index = 0, previousIndex = polygon.length - 1;
+    index < polygon.length;
+    previousIndex = index, index += 1
+  ) {
     const current = polygon[index];
     const previous = polygon[previousIndex];
 
@@ -1286,7 +1603,10 @@ function isPointInsidePolygon(point: Point, polygon: Point[]): boolean {
 
     const intersects =
       current.y > point.y !== previous.y > point.y &&
-      point.x < ((previous.x - current.x) * (point.y - current.y)) / (previous.y - current.y) + current.x;
+      point.x <
+        ((previous.x - current.x) * (point.y - current.y)) /
+          (previous.y - current.y) +
+          current.x;
 
     if (intersects) {
       inside = !inside;
@@ -1296,7 +1616,10 @@ function isPointInsidePolygon(point: Point, polygon: Point[]): boolean {
   return inside;
 }
 
-function getNodeBoundsInTree(node: GeometryNode, nodeId: NodeId): Bounds | undefined {
+function getNodeBoundsInTree(
+  node: GeometryNode,
+  nodeId: NodeId,
+): Bounds | undefined {
   if (node.id === nodeId) {
     return boundsForNode(node);
   }
@@ -1316,7 +1639,10 @@ function getNodeBoundsInTree(node: GeometryNode, nodeId: NodeId): Bounds | undef
   return undefined;
 }
 
-function findNodeInTree(current: GeometryNode, nodeId: NodeId): GeometryNode | undefined {
+function findNodeInTree(
+  current: GeometryNode,
+  nodeId: NodeId,
+): GeometryNode | undefined {
   if (current.id === nodeId) {
     return current;
   }
@@ -1342,14 +1668,18 @@ function handlesForNode(node: GeometryNode): EditHandle[] {
       x: node.x,
       y: node.y,
       width: node.width,
-      height: node.height
+      height: node.height,
     });
   }
 
   if (node.type === "line") {
     return [
-      { nodeId: node.id, kind: "line-start", point: { x: node.x1, y: node.y1 } },
-      { nodeId: node.id, kind: "line-end", point: { x: node.x2, y: node.y2 } }
+      {
+        nodeId: node.id,
+        kind: "line-start",
+        point: { x: node.x1, y: node.y1 },
+      },
+      { nodeId: node.id, kind: "line-end", point: { x: node.x2, y: node.y2 } },
     ];
   }
 
@@ -1359,7 +1689,7 @@ function handlesForNode(node: GeometryNode): EditHandle[] {
         nodeId: node.id,
         kind: "path-spline-point",
         point,
-        pointIndex
+        pointIndex,
       }));
     }
 
@@ -1369,8 +1699,8 @@ function handlesForNode(node: GeometryNode): EditHandle[] {
         nodeId: node.id,
         kind: "path-segment-end" as const,
         point: segment.to,
-        segmentIndex
-      }))
+        segmentIndex,
+      })),
     ];
 
     let current = node.start;
@@ -1381,7 +1711,7 @@ function handlesForNode(node: GeometryNode): EditHandle[] {
           nodeId: node.id,
           kind: "path-quadratic-control",
           point: segment.control,
-          segmentIndex
+          segmentIndex,
         });
       }
 
@@ -1391,14 +1721,14 @@ function handlesForNode(node: GeometryNode): EditHandle[] {
             nodeId: node.id,
             kind: "path-cubic-control-1",
             point: segment.control1,
-            segmentIndex
+            segmentIndex,
           },
           {
             nodeId: node.id,
             kind: "path-cubic-control-2",
             point: segment.control2,
-            segmentIndex
-          }
+            segmentIndex,
+          },
         );
       }
 
@@ -1407,7 +1737,7 @@ function handlesForNode(node: GeometryNode): EditHandle[] {
           nodeId: node.id,
           kind: "path-arc-control",
           point: arcControlPoint(current, segment),
-          segmentIndex
+          segmentIndex,
         });
       }
 
@@ -1422,7 +1752,7 @@ function handlesForNode(node: GeometryNode): EditHandle[] {
       x: node.cx - node.rx,
       y: node.cy - node.ry,
       width: node.rx * 2,
-      height: node.ry * 2
+      height: node.ry * 2,
     });
   }
 
@@ -1431,11 +1761,13 @@ function handlesForNode(node: GeometryNode): EditHandle[] {
       nodeId: node.id,
       kind: "polygon-point",
       point,
-      pointIndex
+      pointIndex,
     }));
-    const bounds = boundsForNode(node);
+    const bounds = geometryBoundsForNode(node);
 
-    return bounds ? [...pointHandles, ...handlesForBounds(node.id, bounds)] : pointHandles;
+    return bounds
+      ? [...pointHandles, ...handlesForBounds(node.id, bounds)]
+      : pointHandles;
   }
 
   return [];
@@ -1455,7 +1787,7 @@ function handlesForBounds(nodeId: NodeId, bounds: Bounds): EditHandle[] {
     { nodeId, kind: "bbox-bottom-right", point: { x: right, y: bottom } },
     { nodeId, kind: "bbox-bottom", point: { x: centerX, y: bottom } },
     { nodeId, kind: "bbox-bottom-left", point: { x: bounds.x, y: bottom } },
-    { nodeId, kind: "bbox-left", point: { x: bounds.x, y: centerY } }
+    { nodeId, kind: "bbox-left", point: { x: bounds.x, y: centerY } },
   ];
 }
 
@@ -1470,7 +1802,7 @@ function snapPointsForNode(node: GeometryNode): SnapPoint[] {
 
   return vertexPointsForNode(node).map((point) => ({
     nodeId: node.id,
-    point
+    point,
   }));
 }
 
@@ -1481,26 +1813,26 @@ function vertexPointsForNode(node: GeometryNode): Point[] {
         { x: node.x, y: node.y },
         { x: node.x + node.width, y: node.y },
         { x: node.x + node.width, y: node.y + node.height },
-        { x: node.x, y: node.y + node.height }
+        { x: node.x, y: node.y + node.height },
       ];
     case "circle":
       return [
         { x: node.cx - node.r, y: node.cy },
         { x: node.cx, y: node.cy - node.r },
         { x: node.cx + node.r, y: node.cy },
-        { x: node.cx, y: node.cy + node.r }
+        { x: node.cx, y: node.cy + node.r },
       ];
     case "ellipse":
       return [
         { x: node.cx - node.rx, y: node.cy },
         { x: node.cx, y: node.cy - node.ry },
         { x: node.cx + node.rx, y: node.cy },
-        { x: node.cx, y: node.cy + node.ry }
+        { x: node.cx, y: node.cy + node.ry },
       ];
     case "line":
       return [
         { x: node.x1, y: node.y1 },
-        { x: node.x2, y: node.y2 }
+        { x: node.x2, y: node.y2 },
       ];
     case "polygon":
     case "polyline":
@@ -1517,20 +1849,35 @@ function vertexPointsForNode(node: GeometryNode): Point[] {
 function createRectHandleUpdatePatch(
   node: RectNode,
   kind: EditHandleKind,
-  point: Point
+  point: Point,
 ): UpdatePatch | undefined {
   const right = node.x + node.width;
   const bottom = node.y + node.height;
 
   switch (kind) {
     case "rect-top-left":
-      return createRectBoundsUpdatePatch(node.id, point, { x: right, y: bottom });
+      return createRectBoundsUpdatePatch(node.id, point, {
+        x: right,
+        y: bottom,
+      });
     case "rect-top-right":
-      return createRectBoundsUpdatePatch(node.id, { x: node.x, y: bottom }, point);
+      return createRectBoundsUpdatePatch(
+        node.id,
+        { x: node.x, y: bottom },
+        point,
+      );
     case "rect-bottom-right":
-      return createRectBoundsUpdatePatch(node.id, { x: node.x, y: node.y }, point);
+      return createRectBoundsUpdatePatch(
+        node.id,
+        { x: node.x, y: node.y },
+        point,
+      );
     case "rect-bottom-left":
-      return createRectBoundsUpdatePatch(node.id, { x: right, y: node.y }, point);
+      return createRectBoundsUpdatePatch(
+        node.id,
+        { x: right, y: node.y },
+        point,
+      );
     default:
       return undefined;
   }
@@ -1549,20 +1896,24 @@ function isBBoxHandleKind(kind: EditHandleKind): boolean {
   );
 }
 
-function createRectBoundsUpdatePatch(nodeId: NodeId, start: Point, end: Point): UpdatePatch {
+function createRectBoundsUpdatePatch(
+  nodeId: NodeId,
+  start: Point,
+  end: Point,
+): UpdatePatch {
   return {
     op: "update",
     target: nodeId,
-    changes: normalizeBounds(start, end)
+    changes: normalizeBounds(start, end),
   };
 }
 
 function createBBoxResizeUpdatePatch(
   node: GeometryNode,
   kind: EditHandleKind,
-  point: Point
+  point: Point,
 ): UpdatePatch | undefined {
-  const bounds = boundsForNode(node);
+  const bounds = geometryBoundsForNode(node);
 
   if (!bounds) {
     return undefined;
@@ -1574,7 +1925,7 @@ function createBBoxResizeUpdatePatch(
     return {
       op: "update",
       target: node.id,
-      changes: nextBounds
+      changes: nextBounds,
     };
   }
 
@@ -1586,8 +1937,8 @@ function createBBoxResizeUpdatePatch(
         cx: nextBounds.x + nextBounds.width / 2,
         cy: nextBounds.y + nextBounds.height / 2,
         rx: nextBounds.width / 2,
-        ry: nextBounds.height / 2
-      }
+        ry: nextBounds.height / 2,
+      },
     };
   }
 
@@ -1596,15 +1947,19 @@ function createBBoxResizeUpdatePatch(
       op: "update",
       target: node.id,
       changes: {
-        points: scalePointsToBounds(node.points, bounds, nextBounds)
-      }
+        points: scalePointsToBounds(node.points, bounds, nextBounds),
+      },
     };
   }
 
   return undefined;
 }
 
-function resizeBounds(bounds: Bounds, kind: EditHandleKind, point: Point): Bounds {
+function resizeBounds(
+  bounds: Bounds,
+  kind: EditHandleKind,
+  point: Point,
+): Bounds {
   const left = bounds.x;
   const top = bounds.y;
   const right = bounds.x + bounds.width;
@@ -1612,13 +1967,25 @@ function resizeBounds(bounds: Bounds, kind: EditHandleKind, point: Point): Bound
 
   switch (kind) {
     case "bbox-top":
-      return normalizeNonEmptyBounds({ x: left, y: point.y }, { x: right, y: bottom });
+      return normalizeNonEmptyBounds(
+        { x: left, y: point.y },
+        { x: right, y: bottom },
+      );
     case "bbox-right":
-      return normalizeNonEmptyBounds({ x: left, y: top }, { x: point.x, y: bottom });
+      return normalizeNonEmptyBounds(
+        { x: left, y: top },
+        { x: point.x, y: bottom },
+      );
     case "bbox-bottom":
-      return normalizeNonEmptyBounds({ x: left, y: top }, { x: right, y: point.y });
+      return normalizeNonEmptyBounds(
+        { x: left, y: top },
+        { x: right, y: point.y },
+      );
     case "bbox-left":
-      return normalizeNonEmptyBounds({ x: point.x, y: top }, { x: right, y: bottom });
+      return normalizeNonEmptyBounds(
+        { x: point.x, y: top },
+        { x: right, y: bottom },
+      );
     case "bbox-top-left":
       return resizeBoundsFromCorner({ x: right, y: bottom }, point, bounds);
     case "bbox-top-right":
@@ -1632,7 +1999,11 @@ function resizeBounds(bounds: Bounds, kind: EditHandleKind, point: Point): Bound
   }
 }
 
-function resizeBoundsFromCorner(anchor: Point, point: Point, originalBounds: Bounds): Bounds {
+function resizeBoundsFromCorner(
+  anchor: Point,
+  point: Point,
+  originalBounds: Bounds,
+): Bounds {
   const ratio = originalBounds.width / Math.max(originalBounds.height, 0.001);
   const dx = point.x - anchor.x;
   const dy = point.y - anchor.y;
@@ -1648,7 +2019,7 @@ function resizeBoundsFromCorner(anchor: Point, point: Point, originalBounds: Bou
 
   const nextPoint = {
     x: anchor.x + Math.sign(dx || 1) * width,
-    y: anchor.y + Math.sign(dy || 1) * height
+    y: anchor.y + Math.sign(dy || 1) * height,
   };
 
   return normalizeNonEmptyBounds(anchor, nextPoint);
@@ -1661,24 +2032,28 @@ function normalizeNonEmptyBounds(start: Point, end: Point): Bounds {
     x: bounds.x,
     y: bounds.y,
     width: Math.max(1, bounds.width),
-    height: Math.max(1, bounds.height)
+    height: Math.max(1, bounds.height),
   };
 }
 
-function scalePointsToBounds(points: Point[], fromBounds: Bounds, toBounds: Bounds): Point[] {
+function scalePointsToBounds(
+  points: Point[],
+  fromBounds: Bounds,
+  toBounds: Bounds,
+): Point[] {
   const width = Math.max(fromBounds.width, 0.001);
   const height = Math.max(fromBounds.height, 0.001);
 
   return points.map((point) => ({
     x: toBounds.x + ((point.x - fromBounds.x) / width) * toBounds.width,
-    y: toBounds.y + ((point.y - fromBounds.y) / height) * toBounds.height
+    y: toBounds.y + ((point.y - fromBounds.y) / height) * toBounds.height,
   }));
 }
 
 function createLineHandleUpdatePatch(
   node: LineNode,
   kind: EditHandleKind,
-  point: Point
+  point: Point,
 ): UpdatePatch | undefined {
   if (kind === "line-start") {
     return {
@@ -1686,8 +2061,8 @@ function createLineHandleUpdatePatch(
       target: node.id,
       changes: {
         x1: point.x,
-        y1: point.y
-      }
+        y1: point.y,
+      },
     };
   }
 
@@ -1697,8 +2072,8 @@ function createLineHandleUpdatePatch(
       target: node.id,
       changes: {
         x2: point.x,
-        y2: point.y
-      }
+        y2: point.y,
+      },
     };
   }
 
@@ -1708,17 +2083,21 @@ function createLineHandleUpdatePatch(
 function createPathHandleUpdatePatch(
   node: PathNode,
   handle: EditHandle,
-  point: Point
+  point: Point,
 ): UpdatePatch | undefined {
-  if (handle.kind === "path-spline-point" && node.spline?.type === "basis" && handle.pointIndex !== undefined) {
+  if (
+    handle.kind === "path-spline-point" &&
+    node.spline?.type === "basis" &&
+    handle.pointIndex !== undefined
+  ) {
     const points = node.spline.points.map((currentPoint, pointIndex) =>
-      pointIndex === handle.pointIndex ? point : currentPoint
+      pointIndex === handle.pointIndex ? point : currentPoint,
     );
 
     return {
       op: "update",
       target: node.id,
-      changes: createBasisSplinePathGeometry(points)
+      changes: createBasisSplinePathGeometry(points),
     };
   }
 
@@ -1731,9 +2110,11 @@ function createPathHandleUpdatePatch(
       changes: {
         start: point,
         segments: node.segments.map((segment, segmentIndex) =>
-          segmentIndex === 0 ? translateSegmentStartControl(segment, delta) : segment
-        )
-      }
+          segmentIndex === 0
+            ? translateSegmentStartControl(segment, delta)
+            : segment,
+        ),
+      },
     };
   }
 
@@ -1755,7 +2136,7 @@ function createPathHandleUpdatePatch(
           if (segmentIndex === movedSegmentIndex) {
             return {
               ...translateSegmentEndControl(segment, delta),
-              to: point
+              to: point,
             };
           }
 
@@ -1764,8 +2145,8 @@ function createPathHandleUpdatePatch(
           }
 
           return segment;
-        })
-      }
+        }),
+      },
     };
   }
 
@@ -1779,27 +2160,39 @@ function createPathHandleUpdatePatch(
             return segment;
           }
 
-          if (handle.kind === "path-quadratic-control" && segment.type === "quadratic") {
+          if (
+            handle.kind === "path-quadratic-control" &&
+            segment.type === "quadratic"
+          ) {
             return { ...segment, control: point };
           }
 
-          if (handle.kind === "path-cubic-control-1" && segment.type === "cubic") {
+          if (
+            handle.kind === "path-cubic-control-1" &&
+            segment.type === "cubic"
+          ) {
             return { ...segment, control1: point };
           }
 
-          if (handle.kind === "path-cubic-control-2" && segment.type === "cubic") {
+          if (
+            handle.kind === "path-cubic-control-2" &&
+            segment.type === "cubic"
+          ) {
             return { ...segment, control2: point };
           }
 
           if (handle.kind === "path-arc-control" && segment.type === "arc") {
-            const start = segmentIndex === 0 ? node.start : node.segments[segmentIndex - 1]?.to ?? node.start;
+            const start =
+              segmentIndex === 0
+                ? node.start
+                : (node.segments[segmentIndex - 1]?.to ?? node.start);
 
             return updateArcSegmentFromControl(start, segment, point);
           }
 
           return segment;
-        })
-      }
+        }),
+      },
     };
   }
 
@@ -1809,14 +2202,14 @@ function createPathHandleUpdatePatch(
 function pointDelta(from: Point, to: Point): Point {
   return {
     x: to.x - from.x,
-    y: to.y - from.y
+    y: to.y - from.y,
   };
 }
 
 function translatePoint(point: Point, delta: Point): Point {
   return {
     x: point.x + delta.x,
-    y: point.y + delta.y
+    y: point.y + delta.y,
   };
 }
 
@@ -1824,7 +2217,7 @@ function translateSegmentStartControl(segment: Segment, delta: Point): Segment {
   if (segment.type === "cubic") {
     return {
       ...segment,
-      control1: translatePoint(segment.control1, delta)
+      control1: translatePoint(segment.control1, delta),
     };
   }
 
@@ -1835,7 +2228,7 @@ function translateSegmentEndControl(segment: Segment, delta: Point): Segment {
   if (segment.type === "cubic") {
     return {
       ...segment,
-      control2: translatePoint(segment.control2, delta)
+      control2: translatePoint(segment.control2, delta),
     };
   }
 
@@ -1845,7 +2238,7 @@ function translateSegmentEndControl(segment: Segment, delta: Point): Segment {
 function createEllipseHandleUpdatePatch(
   node: Extract<GeometryNode, { type: "ellipse" }>,
   kind: EditHandleKind,
-  point: Point
+  point: Point,
 ): UpdatePatch | undefined {
   switch (kind) {
     case "ellipse-left":
@@ -1854,8 +2247,8 @@ function createEllipseHandleUpdatePatch(
         op: "update",
         target: node.id,
         changes: {
-          rx: Math.max(0.5, Math.abs(point.x - node.cx))
-        }
+          rx: Math.max(0.5, Math.abs(point.x - node.cx)),
+        },
       };
     case "ellipse-top":
     case "ellipse-bottom":
@@ -1863,8 +2256,8 @@ function createEllipseHandleUpdatePatch(
         op: "update",
         target: node.id,
         changes: {
-          ry: Math.max(0.5, Math.abs(point.y - node.cy))
-        }
+          ry: Math.max(0.5, Math.abs(point.y - node.cy)),
+        },
       };
     default:
       return undefined;
@@ -1874,7 +2267,7 @@ function createEllipseHandleUpdatePatch(
 function createPolygonHandleUpdatePatch(
   node: PolygonNode | Extract<GeometryNode, { type: "polyline" }>,
   handle: EditHandle,
-  point: Point
+  point: Point,
 ): UpdatePatch | undefined {
   if (handle.kind !== "polygon-point" || handle.pointIndex === undefined) {
     return undefined;
@@ -1885,9 +2278,9 @@ function createPolygonHandleUpdatePatch(
     target: node.id,
     changes: {
       points: node.points.map((currentPoint, pointIndex) =>
-        pointIndex === handle.pointIndex ? point : currentPoint
-      )
-    }
+        pointIndex === handle.pointIndex ? point : currentPoint,
+      ),
+    },
   };
 }
 
@@ -1896,30 +2289,36 @@ function createSegment(
   end: Point,
   mode: PathSegmentMode,
   previous?: Point,
-  tangent?: Point
+  tangent?: Point,
 ): Segment {
   switch (mode) {
     case "quadratic":
       return {
         type: "quadratic",
         control: midpoint(start, end, -0.35),
-        to: end
+        to: end,
       };
     case "cubic":
       return createCubicBezierSegment(previous ?? start, start, end);
     case "arc":
-      return createArcSegmentFromTangent(start, end, tangent ?? startTangent(previous, start));
+      return createArcSegmentFromTangent(
+        start,
+        end,
+        tangent ?? startTangent(previous, start),
+      );
     case "catmullRom":
       return createCatmullRomCubicSegment(previous ?? start, start, end);
     case "basis":
-      return createBasisSplinePathGeometry([start, end]).segments.at(-1) ?? {
-        type: "line",
-        to: end
-      };
+      return (
+        createBasisSplinePathGeometry([start, end]).segments.at(-1) ?? {
+          type: "line",
+          to: end,
+        }
+      );
     case "line":
       return {
         type: "line",
-        to: end
+        to: end,
       };
   }
 }
@@ -1934,7 +2333,8 @@ export function createBasisSplinePathGeometry(points: Point[]): {
   spline: PathSpline;
 } {
   const fallbackPoint = { x: 0, y: 0 };
-  const controlPoints = points.length > 0 ? points.map(copyPoint) : [fallbackPoint];
+  const controlPoints =
+    points.length > 0 ? points.map(copyPoint) : [fallbackPoint];
 
   if (controlPoints.length === 1) {
     return {
@@ -1942,8 +2342,8 @@ export function createBasisSplinePathGeometry(points: Point[]): {
       segments: [],
       spline: {
         type: "basis",
-        points: controlPoints
-      }
+        points: controlPoints,
+      },
     };
   }
 
@@ -1967,13 +2367,13 @@ export function createBasisSplinePathGeometry(points: Point[]): {
       type: "cubic",
       control1: weightedPoint([
         [p1, 4],
-        [p2, 2]
+        [p2, 2],
       ]),
       control2: weightedPoint([
         [p1, 2],
-        [p2, 4]
+        [p2, 4],
       ]),
-      to: basisBezierPoint(p1, p2, p3)
+      to: basisBezierPoint(p1, p2, p3),
     });
   }
 
@@ -1986,8 +2386,8 @@ export function createBasisSplinePathGeometry(points: Point[]): {
     segments,
     spline: {
       type: "basis",
-      points: controlPoints
-    }
+      points: controlPoints,
+    },
   };
 }
 
@@ -2003,23 +2403,34 @@ function basisBezierPoint(p0: Point, p1: Point, p2: Point): Point {
   return weightedPoint([
     [p0, 1],
     [p1, 4],
-    [p2, 1]
+    [p2, 1],
   ]);
 }
 
 function weightedPoint(weightedPoints: Array<[Point, number]>): Point {
-  const totalWeight = weightedPoints.reduce((sum, [, weight]) => sum + weight, 0);
+  const totalWeight = weightedPoints.reduce(
+    (sum, [, weight]) => sum + weight,
+    0,
+  );
 
   return {
-    x: weightedPoints.reduce((sum, [point, weight]) => sum + point.x * weight, 0) / totalWeight,
-    y: weightedPoints.reduce((sum, [point, weight]) => sum + point.y * weight, 0) / totalWeight
+    x:
+      weightedPoints.reduce(
+        (sum, [point, weight]) => sum + point.x * weight,
+        0,
+      ) / totalWeight,
+    y:
+      weightedPoints.reduce(
+        (sum, [point, weight]) => sum + point.y * weight,
+        0,
+      ) / totalWeight,
   };
 }
 
 function copyPoint(point: Point): Point {
   return {
     x: point.x,
-    y: point.y
+    y: point.y,
   };
 }
 
@@ -2038,7 +2449,10 @@ export function getPathEndTangent(node: PathNode): Point {
     return { x: 1, y: 0 };
   }
 
-  const start = node.segments.length < 2 ? node.start : node.segments[node.segments.length - 2]?.to ?? node.start;
+  const start =
+    node.segments.length < 2
+      ? node.start
+      : (node.segments[node.segments.length - 2]?.to ?? node.start);
 
   return segmentEndTangent(start, lastSegment);
 }
@@ -2047,21 +2461,21 @@ function segmentEndTangent(start: Point, segment: Segment): Point {
   if (segment.type === "line") {
     return normalizeVector({
       x: segment.to.x - start.x,
-      y: segment.to.y - start.y
+      y: segment.to.y - start.y,
     });
   }
 
   if (segment.type === "quadratic") {
     return normalizeVector({
       x: segment.to.x - segment.control.x,
-      y: segment.to.y - segment.control.y
+      y: segment.to.y - segment.control.y,
     });
   }
 
   if (segment.type === "cubic") {
     return normalizeVector({
       x: segment.to.x - segment.control2.x,
-      y: segment.to.y - segment.control2.y
+      y: segment.to.y - segment.control2.y,
     });
   }
 
@@ -2070,7 +2484,7 @@ function segmentEndTangent(start: Point, segment: Segment): Point {
   if (!parameters) {
     return normalizeVector({
       x: segment.to.x - start.x,
-      y: segment.to.y - start.y
+      y: segment.to.y - start.y,
     });
   }
 
@@ -2080,12 +2494,12 @@ function segmentEndTangent(start: Point, segment: Segment): Point {
   const direction = parameters.deltaAngle >= 0 ? 1 : -1;
   const localDerivative = {
     x: -parameters.rx * Math.sin(angle),
-    y: parameters.ry * Math.cos(angle)
+    y: parameters.ry * Math.cos(angle),
   };
 
   return normalizeVector({
     x: (localDerivative.x * cosPhi - localDerivative.y * sinPhi) * direction,
-    y: (localDerivative.x * sinPhi + localDerivative.y * cosPhi) * direction
+    y: (localDerivative.x * sinPhi + localDerivative.y * cosPhi) * direction,
   });
 }
 
@@ -2099,7 +2513,7 @@ function appendCatmullRomSegment(node: PathNode, end: Point): Segment[] {
   if (lastSegment?.type === "cubic") {
     nextSegments[nextSegments.length - 1] = {
       ...lastSegment,
-      control2: catmullRomControl2(previous, lastSegment.to, end)
+      control2: catmullRomControl2(previous, lastSegment.to, end),
     };
   }
 
@@ -2111,15 +2525,15 @@ function appendCatmullRomSegment(node: PathNode, end: Point): Segment[] {
 export function createCubicBezierSegment(
   previous: Point,
   start: Point,
-  end: Point
+  end: Point,
 ): Extract<Segment, { type: "cubic" }> {
   const incoming = {
     x: start.x - previous.x,
-    y: start.y - previous.y
+    y: start.y - previous.y,
   };
   const outgoing = {
     x: end.x - start.x,
-    y: end.y - start.y
+    y: end.y - start.y,
   };
   const incomingLength = Math.hypot(incoming.x, incoming.y);
   const outgoingLength = Math.max(Math.hypot(outgoing.x, outgoing.y), 0.001);
@@ -2129,7 +2543,7 @@ export function createCubicBezierSegment(
       type: "cubic",
       control1: lerpPoint(start, end, 1 / 3),
       control2: lerpPoint(start, end, 2 / 3),
-      to: end
+      to: end,
     };
   }
 
@@ -2139,37 +2553,37 @@ export function createCubicBezierSegment(
     type: "cubic",
     control1: {
       x: start.x + (incoming.x / incomingLength) * tangentLength,
-      y: start.y + (incoming.y / incomingLength) * tangentLength
+      y: start.y + (incoming.y / incomingLength) * tangentLength,
     },
     control2: lerpPoint(start, end, 2 / 3),
-    to: end
+    to: end,
   };
 }
 
 function createCatmullRomCubicSegment(
   previous: Point,
   start: Point,
-  end: Point
+  end: Point,
 ): Extract<Segment, { type: "cubic" }> {
   return {
     type: "cubic",
     control1: catmullRomControl1(previous, start, end),
     control2: catmullRomControl2(start, end, end),
-    to: end
+    to: end,
   };
 }
 
 function catmullRomControl1(previous: Point, start: Point, end: Point): Point {
   return {
     x: start.x + (end.x - previous.x) / 6,
-    y: start.y + (end.y - previous.y) / 6
+    y: start.y + (end.y - previous.y) / 6,
   };
 }
 
 function catmullRomControl2(start: Point, end: Point, next: Point): Point {
   return {
     x: end.x - (next.x - start.x) / 6,
-    y: end.y - (next.y - start.y) / 6
+    y: end.y - (next.y - start.y) / 6,
   };
 }
 
@@ -2188,11 +2602,14 @@ function startTangent(previous: Point | undefined, start: Point): Point {
 
   return {
     x: dx / length,
-    y: dy / length
+    y: dy / length,
   };
 }
 
-export function arcControlPoint(start: Point, segment: Extract<Segment, { type: "arc" }>): Point {
+export function arcControlPoint(
+  start: Point,
+  segment: Extract<Segment, { type: "arc" }>,
+): Point {
   const parameters = arcCenterParameters(start, segment);
 
   if (parameters) {
@@ -2205,19 +2622,25 @@ export function arcControlPoint(start: Point, segment: Extract<Segment, { type: 
   const dy = end.y - start.y;
   const length = Math.max(Math.hypot(dx, dy), 0.001);
   const radius = Math.max(segment.rx, segment.ry, length / 2);
-  const sagitta = Math.max(12, Math.min(radius, radius - Math.sqrt(Math.max(0, radius * radius - (length / 2) ** 2))));
+  const sagitta = Math.max(
+    12,
+    Math.min(
+      radius,
+      radius - Math.sqrt(Math.max(0, radius * radius - (length / 2) ** 2)),
+    ),
+  );
   const direction = segment.sweep ? 1 : -1;
 
   return {
     x: mid.x + (-dy / length) * sagitta * direction,
-    y: mid.y + (dx / length) * sagitta * direction
+    y: mid.y + (dx / length) * sagitta * direction,
   };
 }
 
 export function createArcSegmentFromControl(
   start: Point,
   end: Point,
-  control: Point
+  control: Point,
 ): Extract<Segment, { type: "arc" }> {
   const circularArc = circularArcThroughPoints(start, control, end);
 
@@ -2231,12 +2654,12 @@ export function createArcSegmentFromControl(
 export function createArcSegmentFromTangent(
   start: Point,
   end: Point,
-  tangent: Point
+  tangent: Point,
 ): Extract<Segment, { type: "arc" }> {
   const normalizedTangent = normalizeVector(tangent);
   const normal = {
     x: -normalizedTangent.y,
-    y: normalizedTangent.x
+    y: normalizedTangent.x,
   };
   const dx = end.x - start.x;
   const dy = end.y - start.y;
@@ -2249,13 +2672,15 @@ export function createArcSegmentFromTangent(
   const signedRadius = (dx * dx + dy * dy) / denominator;
   const center = {
     x: start.x + normal.x * signedRadius,
-    y: start.y + normal.y * signedRadius
+    y: start.y + normal.y * signedRadius,
   };
   const radius = Math.max(1, Math.abs(signedRadius));
   const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
   const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
   const sweep = signedRadius >= 0;
-  const delta = sweep ? positiveAngle(endAngle - startAngle) : positiveAngle(startAngle - endAngle);
+  const delta = sweep
+    ? positiveAngle(endAngle - startAngle)
+    : positiveAngle(startAngle - endAngle);
 
   return {
     type: "arc",
@@ -2264,7 +2689,7 @@ export function createArcSegmentFromTangent(
     xAxisRotation: 0,
     largeArc: delta > Math.PI,
     sweep,
-    to: end
+    to: end,
   };
 }
 
@@ -2277,7 +2702,7 @@ function normalizeVector(vector: Point): Point {
 
   return {
     x: vector.x / length,
-    y: vector.y / length
+    y: vector.y / length,
   };
 }
 
@@ -2289,14 +2714,14 @@ function defaultArcSegment(end: Point): Extract<Segment, { type: "arc" }> {
     xAxisRotation: 0,
     largeArc: false,
     sweep: true,
-    to: end
+    to: end,
   };
 }
 
 function circularArcThroughPoints(
   start: Point,
   control: Point,
-  end: Point
+  end: Point,
 ): Extract<Segment, { type: "arc" }> | undefined {
   const determinant =
     2 *
@@ -2321,9 +2746,12 @@ function circularArcThroughPoints(
       (startLength * (end.x - control.x) +
         controlLength * (start.x - end.x) +
         endLength * (control.x - start.x)) /
-      determinant
+      determinant,
   };
-  const radius = Math.max(1, Math.hypot(start.x - center.x, start.y - center.y));
+  const radius = Math.max(
+    1,
+    Math.hypot(start.x - center.x, start.y - center.y),
+  );
   const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
   const controlAngle = Math.atan2(control.y - center.y, control.x - center.x);
   const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
@@ -2339,7 +2767,7 @@ function circularArcThroughPoints(
     xAxisRotation: 0,
     largeArc: delta > Math.PI,
     sweep,
-    to: end
+    to: end,
   };
 }
 
@@ -2351,7 +2779,7 @@ function positiveAngle(angle: number): number {
 function updateArcSegmentFromControl(
   start: Point,
   segment: Extract<Segment, { type: "arc" }>,
-  control: Point
+  control: Point,
 ): Extract<Segment, { type: "arc" }> {
   const circularArc = circularArcThroughPoints(start, control, segment.to);
 
@@ -2366,9 +2794,10 @@ function updateArcSegmentFromControl(
   const chordLength = Math.max(Math.hypot(dx, dy), 0.001);
   const normal = {
     x: -dy / chordLength,
-    y: dx / chordLength
+    y: dx / chordLength,
   };
-  const signedSagitta = (control.x - mid.x) * normal.x + (control.y - mid.y) * normal.y;
+  const signedSagitta =
+    (control.x - mid.x) * normal.x + (control.y - mid.y) * normal.y;
   const sagitta = Math.max(1, Math.abs(signedSagitta));
   const radius = (chordLength * chordLength) / (8 * sagitta) + sagitta / 2;
 
@@ -2378,14 +2807,14 @@ function updateArcSegmentFromControl(
     ry: Math.max(1, radius),
     xAxisRotation: 0,
     largeArc: sagitta > radius,
-    sweep: signedSagitta >= 0
+    sweep: signedSagitta >= 0,
   };
 }
 
 function lerpPoint(start: Point, end: Point, amount: number): Point {
   return {
     x: start.x + (end.x - start.x) * amount,
-    y: start.y + (end.y - start.y) * amount
+    y: start.y + (end.y - start.y) * amount,
   };
 }
 
@@ -2394,22 +2823,30 @@ function midpoint(start: Point, end: Point, perpendicularScale: number): Point {
 
   return {
     x: mid.x - (end.y - start.y) * perpendicularScale,
-    y: mid.y + (end.x - start.x) * perpendicularScale
+    y: mid.y + (end.x - start.x) * perpendicularScale,
   };
 }
 
 function boundsForNode(node: GeometryNode): Bounds | undefined {
+  if (node.type === "group") {
+    return mergeBounds(node.children.map(boundsForNode).filter(isBounds));
+  }
+
+  return expandBoundsForStroke(node, geometryBoundsForNode(node));
+}
+
+function geometryBoundsForNode(node: GeometryNode): Bounds | undefined {
   let bounds: Bounds | undefined;
 
   switch (node.type) {
     case "group":
-      return mergeBounds(node.children.map(boundsForNode).filter(isBounds));
+      return mergeBounds(node.children.map(geometryBoundsForNode).filter(isBounds));
     case "rect":
       bounds = {
         x: node.x,
         y: node.y,
         width: node.width,
-        height: node.height
+        height: node.height,
       };
       break;
     case "circle":
@@ -2417,7 +2854,7 @@ function boundsForNode(node: GeometryNode): Bounds | undefined {
         x: node.cx - node.r,
         y: node.cy - node.r,
         width: node.r * 2,
-        height: node.r * 2
+        height: node.r * 2,
       };
       break;
     case "ellipse":
@@ -2425,32 +2862,46 @@ function boundsForNode(node: GeometryNode): Bounds | undefined {
         x: node.cx - node.rx,
         y: node.cy - node.ry,
         width: node.rx * 2,
-        height: node.ry * 2
+        height: node.ry * 2,
       };
       break;
     case "line":
-      bounds = normalizeBounds({ x: node.x1, y: node.y1 }, { x: node.x2, y: node.y2 });
+      bounds = normalizeBounds(
+        { x: node.x1, y: node.y1 },
+        { x: node.x2, y: node.y2 },
+      );
       break;
     case "polygon":
     case "polyline":
-      bounds = mergeBounds(node.points.map((point) => ({ ...point, width: 0, height: 0 })));
+      bounds = mergeBounds(
+        node.points.map((point) => ({ ...point, width: 0, height: 0 })),
+      );
       break;
     case "path":
-      bounds = mergeBounds(pathRenderPoints(node).map((point) => ({ ...point, width: 0, height: 0 })));
+      bounds = mergeBounds(
+        pathRenderPoints(node).map((point) => ({
+          ...point,
+          width: 0,
+          height: 0,
+        })),
+      );
       break;
     case "text":
       bounds = boundsForTextNode(node);
       break;
   }
 
-  return expandBoundsForStroke(node, bounds);
+  return bounds;
 }
 
 function boundsForTextNode(node: TextNode): Bounds {
   const fontSize = node.fontSize ?? 16;
   const lines = textLines(node.text);
   const lineHeight = textLineHeight(fontSize);
-  const width = Math.max(fontSize * 0.6, ...lines.map((line) => line.length * fontSize * 0.6));
+  const width = Math.max(
+    fontSize * 0.6,
+    ...lines.map((line) => line.length * fontSize * 0.6),
+  );
   const height = Math.max(lineHeight, lineHeight * lines.length);
   const x =
     node.textAnchor === "middle"
@@ -2470,7 +2921,7 @@ function boundsForTextNode(node: TextNode): Bounds {
     x,
     y,
     width,
-    height
+    height,
   };
 }
 
@@ -2492,20 +2943,33 @@ function samplePathSegment(start: Point, segment: Segment): Point[] {
   }
 
   if (segment.type === "quadratic") {
-    return sampleParametricCurve((amount) => quadraticPoint(start, segment.control, segment.to, amount), 24);
+    return sampleParametricCurve(
+      (amount) => quadraticPoint(start, segment.control, segment.to, amount),
+      24,
+    );
   }
 
   if (segment.type === "cubic") {
     return sampleParametricCurve(
-      (amount) => cubicPoint(start, segment.control1, segment.control2, segment.to, amount),
-      32
+      (amount) =>
+        cubicPoint(
+          start,
+          segment.control1,
+          segment.control2,
+          segment.to,
+          amount,
+        ),
+      32,
     );
   }
 
   return sampleArcSegment(start, segment);
 }
 
-function sampleParametricCurve(pointAt: (amount: number) => Point, sampleCount: number): Point[] {
+function sampleParametricCurve(
+  pointAt: (amount: number) => Point,
+  sampleCount: number,
+): Point[] {
   const points: Point[] = [];
 
   for (let index = 1; index <= sampleCount; index += 1) {
@@ -2515,16 +2979,33 @@ function sampleParametricCurve(pointAt: (amount: number) => Point, sampleCount: 
   return points;
 }
 
-function quadraticPoint(start: Point, control: Point, end: Point, amount: number): Point {
+function quadraticPoint(
+  start: Point,
+  control: Point,
+  end: Point,
+  amount: number,
+): Point {
   const inverse = 1 - amount;
 
   return {
-    x: inverse * inverse * start.x + 2 * inverse * amount * control.x + amount * amount * end.x,
-    y: inverse * inverse * start.y + 2 * inverse * amount * control.y + amount * amount * end.y
+    x:
+      inverse * inverse * start.x +
+      2 * inverse * amount * control.x +
+      amount * amount * end.x,
+    y:
+      inverse * inverse * start.y +
+      2 * inverse * amount * control.y +
+      amount * amount * end.y,
   };
 }
 
-function cubicPoint(start: Point, control1: Point, control2: Point, end: Point, amount: number): Point {
+function cubicPoint(
+  start: Point,
+  control1: Point,
+  control2: Point,
+  end: Point,
+  amount: number,
+): Point {
   const inverse = 1 - amount;
 
   return {
@@ -2537,11 +3018,14 @@ function cubicPoint(start: Point, control1: Point, control2: Point, end: Point, 
       inverse * inverse * inverse * start.y +
       3 * inverse * inverse * amount * control1.y +
       3 * inverse * amount * amount * control2.y +
-      amount * amount * amount * end.y
+      amount * amount * amount * end.y,
   };
 }
 
-function sampleArcSegment(start: Point, segment: Extract<Segment, { type: "arc" }>): Point[] {
+function sampleArcSegment(
+  start: Point,
+  segment: Extract<Segment, { type: "arc" }>,
+): Point[] {
   const parameters = arcCenterParameters(start, segment);
 
   if (!parameters) {
@@ -2550,14 +3034,19 @@ function sampleArcSegment(start: Point, segment: Extract<Segment, { type: "arc" 
 
   return sampleParametricCurve(
     (amount) => (amount === 1 ? segment.to : pointOnArc(parameters, amount)),
-    arcSampleCount(parameters)
+    arcSampleCount(parameters),
   );
 }
 
-function arcSampleCount(parameters: NonNullable<ReturnType<typeof arcCenterParameters>>): number {
+function arcSampleCount(
+  parameters: NonNullable<ReturnType<typeof arcCenterParameters>>,
+): number {
   const radius = Math.max(parameters.rx, parameters.ry);
 
-  return Math.max(16, Math.min(96, Math.ceil(Math.abs(parameters.deltaAngle) * radius / 8)));
+  return Math.max(
+    16,
+    Math.min(96, Math.ceil((Math.abs(parameters.deltaAngle) * radius) / 8)),
+  );
 }
 
 function mergeBounds(boundsList: Bounds[]): Bounds | undefined {
@@ -2568,31 +3057,40 @@ function mergeBounds(boundsList: Bounds[]): Bounds | undefined {
   const minX = Math.min(...boundsList.map((bounds) => bounds.x));
   const minY = Math.min(...boundsList.map((bounds) => bounds.y));
   const maxX = Math.max(...boundsList.map((bounds) => bounds.x + bounds.width));
-  const maxY = Math.max(...boundsList.map((bounds) => bounds.y + bounds.height));
+  const maxY = Math.max(
+    ...boundsList.map((bounds) => bounds.y + bounds.height),
+  );
 
   return {
     x: minX,
     y: minY,
     width: maxX - minX,
-    height: maxY - minY
+    height: maxY - minY,
   };
 }
 
-function expandBoundsForStroke(node: GeometryNode, bounds: Bounds | undefined): Bounds | undefined {
+function expandBoundsForStroke(
+  node: GeometryNode,
+  bounds: Bounds | undefined,
+): Bounds | undefined {
   if (!bounds || !hasVisibleStroke(node)) {
     return bounds;
   }
 
-  const strokeWidth = node.type === "text"
-    ? node.style?.strokeWidth ?? node.strokeWidth ?? defaultStyle.strokeWidth ?? 0
-    : node.style?.strokeWidth ?? defaultStyle.strokeWidth ?? 0;
+  const strokeWidth =
+    node.type === "text"
+      ? (node.style?.strokeWidth ??
+        node.strokeWidth ??
+        defaultStyle.strokeWidth ??
+        0)
+      : (node.style?.strokeWidth ?? defaultStyle.strokeWidth ?? 0);
   const padding = Math.max(0, strokeWidth / 2);
 
   return {
     x: bounds.x - padding,
     y: bounds.y - padding,
     width: bounds.width + padding * 2,
-    height: bounds.height + padding * 2
+    height: bounds.height + padding * 2,
   };
 }
 
@@ -2609,19 +3107,31 @@ function isPointInsideBounds(point: Point, bounds: Bounds): boolean {
   );
 }
 
-function isPointNearBounds(point: Point, bounds: Bounds, tolerance: number): boolean {
-  const top = distanceToSegment(point, { x: bounds.x, y: bounds.y }, { x: bounds.x + bounds.width, y: bounds.y });
+function isPointNearBounds(
+  point: Point,
+  bounds: Bounds,
+  tolerance: number,
+): boolean {
+  const top = distanceToSegment(
+    point,
+    { x: bounds.x, y: bounds.y },
+    { x: bounds.x + bounds.width, y: bounds.y },
+  );
   const right = distanceToSegment(
     point,
     { x: bounds.x + bounds.width, y: bounds.y },
-    { x: bounds.x + bounds.width, y: bounds.y + bounds.height }
+    { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
   );
   const bottom = distanceToSegment(
     point,
     { x: bounds.x, y: bounds.y + bounds.height },
-    { x: bounds.x + bounds.width, y: bounds.y + bounds.height }
+    { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
   );
-  const left = distanceToSegment(point, { x: bounds.x, y: bounds.y }, { x: bounds.x, y: bounds.y + bounds.height });
+  const left = distanceToSegment(
+    point,
+    { x: bounds.x, y: bounds.y },
+    { x: bounds.x, y: bounds.y + bounds.height },
+  );
 
   return Math.min(top, right, bottom, left) <= tolerance;
 }
@@ -2630,13 +3140,17 @@ function isPointNearPolyline(
   point: Point,
   points: Point[],
   closed: boolean,
-  tolerance: number
+  tolerance: number,
 ): boolean {
   for (let index = 0; index < points.length - 1; index += 1) {
     const current = points[index];
     const next = points[index + 1];
 
-    if (current && next && distanceToSegment(point, current, next) <= tolerance) {
+    if (
+      current &&
+      next &&
+      distanceToSegment(point, current, next) <= tolerance
+    ) {
       return true;
     }
   }
@@ -2644,10 +3158,19 @@ function isPointNearPolyline(
   const first = points[0];
   const last = points.at(-1);
 
-  return Boolean(closed && first && last && distanceToSegment(point, last, first) <= tolerance);
+  return Boolean(
+    closed &&
+    first &&
+    last &&
+    distanceToSegment(point, last, first) <= tolerance,
+  );
 }
 
-function isPointNearPath(point: Point, node: PathNode, tolerance: number): boolean {
+function isPointNearPath(
+  point: Point,
+  node: PathNode,
+  tolerance: number,
+): boolean {
   let current = node.start;
 
   for (const segment of node.segments) {
@@ -2658,10 +3181,16 @@ function isPointNearPath(point: Point, node: PathNode, tolerance: number): boole
     current = segment.to;
   }
 
-  return node.closed && distanceToSegment(point, current, node.start) <= tolerance;
+  return (
+    node.closed && distanceToSegment(point, current, node.start) <= tolerance
+  );
 }
 
-function distanceToPathSegment(point: Point, start: Point, segment: Segment): number {
+function distanceToPathSegment(
+  point: Point,
+  start: Point,
+  segment: Segment,
+): number {
   if (segment.type === "arc") {
     return distanceToArcSegment(point, start, segment);
   }
@@ -2684,7 +3213,7 @@ function distanceToPathSegment(point: Point, start: Point, segment: Segment): nu
 function distanceToArcSegment(
   point: Point,
   start: Point,
-  segment: Extract<Segment, { type: "arc" }>
+  segment: Extract<Segment, { type: "arc" }>,
 ): number {
   const parameters = arcCenterParameters(start, segment);
 
@@ -2697,7 +3226,10 @@ function distanceToArcSegment(
   let previous = start;
 
   for (let index = 1; index <= sampleCount; index += 1) {
-    const current = index === sampleCount ? segment.to : pointOnArc(parameters, index / sampleCount);
+    const current =
+      index === sampleCount
+        ? segment.to
+        : pointOnArc(parameters, index / sampleCount);
     nearest = Math.min(nearest, distanceToSegment(point, previous, current));
     previous = current;
   }
@@ -2720,12 +3252,15 @@ function distanceToSegment(point: Point, start: Point, end: Point): number {
 
   const t = Math.max(
     0,
-    Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared)
+    Math.min(
+      1,
+      ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared,
+    ),
   );
 
   return distance(point, {
     x: start.x + t * dx,
-    y: start.y + t * dy
+    y: start.y + t * dy,
   });
 }
 

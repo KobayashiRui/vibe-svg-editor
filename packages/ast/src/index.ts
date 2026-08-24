@@ -12,11 +12,23 @@ export type Bounds = {
   height: number;
 };
 
+export type ViewBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type Paint = string | "none";
 
 export type StrokeLineCap = "butt" | "round" | "square";
 
-export type StrokeLineJoin = "arcs" | "bevel" | "miter" | "miter-clip" | "round";
+export type StrokeLineJoin =
+  | "arcs"
+  | "bevel"
+  | "miter"
+  | "miter-clip"
+  | "round";
 
 export type NodeStyle = {
   fill?: Paint;
@@ -138,7 +150,11 @@ export type ArcSegment = {
   to: Point;
 };
 
-export type Segment = LineSegment | CubicBezierSegment | QuadraticBezierSegment | ArcSegment;
+export type Segment =
+  | LineSegment
+  | CubicBezierSegment
+  | QuadraticBezierSegment
+  | ArcSegment;
 
 export type PathSpline = {
   type: "basis";
@@ -162,13 +178,14 @@ export type TextRun = {
   style?: Partial<TextStyle>;
 };
 
-export type TextNode = BaseNode & TextStyle & {
-  type: "text";
-  x: number;
-  y: number;
-  text: string;
-  runs?: TextRun[];
-};
+export type TextNode = BaseNode &
+  TextStyle & {
+    type: "text";
+    x: number;
+    y: number;
+    text: string;
+    runs?: TextRun[];
+  };
 
 export type GeometryNode =
   | GroupNode
@@ -191,8 +208,11 @@ export type Comment = {
 export type GeometryDocument = {
   id: string;
   name: string;
+  /** SVG output viewport dimensions. */
   width: number;
   height: number;
+  /** SVG user-coordinate range. When omitted, it is 0 0 width height. */
+  viewBox?: ViewBox;
   background?: DocumentBackground;
   root: GroupNode;
   comments: Comment[];
@@ -250,7 +270,12 @@ export type MovePatch = {
 
 export type UpdateDocumentPatch = {
   op: "updateDocument";
-  changes: Partial<Pick<GeometryDocument, "background" | "name" | "width" | "height">>;
+  changes: Partial<
+    Pick<
+      GeometryDocument,
+      "background" | "name" | "width" | "height" | "viewBox"
+    >
+  >;
 };
 
 export type PatchOperation =
@@ -270,6 +295,7 @@ export type CreateDocumentOptions = {
   name?: string;
   width?: number;
   height?: number;
+  viewBox?: ViewBox;
 };
 
 export type CreatePageOptions = CreateDocumentOptions & {
@@ -284,23 +310,38 @@ export type CreateProjectOptions = {
   projectPrompt?: string;
   width?: number;
   height?: number;
+  viewBox?: ViewBox;
 };
 
-export function createDocument(options: CreateDocumentOptions = {}): GeometryDocument {
+export function createDocument(
+  options: CreateDocumentOptions = {},
+): GeometryDocument {
   return {
     id: options.id ?? "document-1",
     name: options.name ?? "Untitled",
     width: options.width ?? 1024,
     height: options.height ?? 768,
+    ...(options.viewBox ? { viewBox: { ...options.viewBox } } : {}),
     background: options.background,
     root: {
       id: "root",
       type: "group",
       name: "Root",
-      children: []
+      children: [],
     },
-    comments: []
+    comments: [],
   };
+}
+
+export function getDocumentViewBox(document: GeometryDocument): ViewBox {
+  return (
+    document.viewBox ?? {
+      x: 0,
+      y: 0,
+      width: document.width,
+      height: document.height,
+    }
+  );
 }
 
 export function createPage(options: CreatePageOptions = {}): GlyphSmithPage {
@@ -314,18 +355,22 @@ export function createPage(options: CreatePageOptions = {}): GlyphSmithPage {
       id: options.id ?? `${pageId}-document`,
       name,
       width: options.width,
-      height: options.height
-    })
+      height: options.height,
+      viewBox: options.viewBox,
+    }),
   };
 }
 
-export function createProject(options: CreateProjectOptions = {}): GlyphSmithProject {
+export function createProject(
+  options: CreateProjectOptions = {},
+): GlyphSmithProject {
   const firstPage = createPage({
     pageId: options.pageId,
     id: options.documentId,
     name: "Page 1",
     width: options.width,
-    height: options.height
+    height: options.height,
+    viewBox: options.viewBox,
   });
   const now = new Date().toISOString();
 
@@ -338,37 +383,58 @@ export function createProject(options: CreateProjectOptions = {}): GlyphSmithPro
     settings: {
       defaultCanvas: {
         width: options.width ?? 1024,
-        height: options.height ?? 768
-      }
+        height: options.height ?? 768,
+      },
     },
     pages: [firstPage],
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   };
 }
 
-export function isGlyphSmithProject(value: unknown): value is GlyphSmithProject {
+export function isGlyphSmithProject(
+  value: unknown,
+): value is GlyphSmithProject {
   if (!isRecord(value)) {
     return false;
   }
 
-  if (value.schemaVersion !== 1 || typeof value.id !== "string" || typeof value.name !== "string") {
+  if (
+    value.schemaVersion !== 1 ||
+    typeof value.id !== "string" ||
+    typeof value.name !== "string"
+  ) {
     return false;
   }
 
-  if (typeof value.activePageId !== "string" || !Array.isArray(value.pages) || value.pages.length === 0) {
+  if (
+    typeof value.activePageId !== "string" ||
+    !Array.isArray(value.pages) ||
+    value.pages.length === 0
+  ) {
     return false;
   }
 
-  if ("projectPrompt" in value && value.projectPrompt !== undefined && typeof value.projectPrompt !== "string") {
+  if (
+    "projectPrompt" in value &&
+    value.projectPrompt !== undefined &&
+    typeof value.projectPrompt !== "string"
+  ) {
     return false;
   }
 
-  if ("settings" in value && value.settings !== undefined && !isProjectSettings(value.settings)) {
+  if (
+    "settings" in value &&
+    value.settings !== undefined &&
+    !isProjectSettings(value.settings)
+  ) {
     return false;
   }
 
-  return value.pages.every(isGlyphSmithPage) && value.pages.some((page) => page.id === value.activePageId);
+  return (
+    value.pages.every(isGlyphSmithPage) &&
+    value.pages.some((page) => page.id === value.activePageId)
+  );
 }
 
 function isProjectSettings(value: unknown): value is ProjectSettings {
@@ -419,10 +485,29 @@ function isGeometryDocument(value: unknown): value is GeometryDocument {
     typeof value.height === "number" &&
     Number.isFinite(value.height) &&
     value.height > 0 &&
+    (!("viewBox" in value) ||
+      value.viewBox === undefined ||
+      isViewBox(value.viewBox)) &&
     value.root.type === "group" &&
     typeof value.root.id === "string" &&
     Array.isArray(value.root.children) &&
     Array.isArray(value.comments)
+  );
+}
+
+function isViewBox(value: unknown): value is ViewBox {
+  return (
+    isRecord(value) &&
+    typeof value.x === "number" &&
+    Number.isFinite(value.x) &&
+    typeof value.y === "number" &&
+    Number.isFinite(value.y) &&
+    typeof value.width === "number" &&
+    Number.isFinite(value.width) &&
+    value.width > 0 &&
+    typeof value.height === "number" &&
+    Number.isFinite(value.height) &&
+    value.height > 0
   );
 }
 

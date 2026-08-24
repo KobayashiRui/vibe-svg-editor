@@ -1,5 +1,6 @@
 import {
   createPage,
+  getDocumentViewBox,
   type GeometryDocument,
   type GeometryNode,
   type GlyphSmithPage,
@@ -8,14 +9,17 @@ import {
   type PatchOperation,
   type Point,
   type Segment,
-  type Selection
+  type Selection,
 } from "@glyphsmith/ast";
 import { applyPatch, applyPatches } from "@glyphsmith/kernel";
 import { exportToSvg } from "@glyphsmith/svg";
 
 export type GlyphSmithMcpStore = {
   readProject(): GlyphSmithProject;
-  writeProject(project: GlyphSmithProject, source?: unknown): { project: GlyphSmithProject; revision: string };
+  writeProject(
+    project: GlyphSmithProject,
+    source?: unknown,
+  ): { project: GlyphSmithProject; revision: string };
   revision(): string;
   selection(): Selection;
 };
@@ -28,38 +32,41 @@ export function mcpTools() {
   return [
     {
       name: "project_get",
-      description: "Read the active GlyphSmith project, including projectPrompt when present.",
-      inputSchema: { type: "object", properties: {} }
+      description:
+        "Read the active GlyphSmith project, including projectPrompt when present.",
+      inputSchema: { type: "object", properties: {} },
     },
     {
       name: "pages_list",
       description: "List pages in the active GlyphSmith project.",
-      inputSchema: { type: "object", properties: {} }
+      inputSchema: { type: "object", properties: {} },
     },
     {
       name: "document_get",
-      description: "Read a GeometryDocument by pageId, or the active document when pageId is omitted.",
+      description:
+        "Read a GeometryDocument by pageId, or the active document when pageId is omitted.",
       inputSchema: {
         type: "object",
         properties: {
-          pageId: { type: "string" }
-        }
-      }
+          pageId: { type: "string" },
+        },
+      },
     },
     {
       name: "selection_get",
       description: "Read the current editor selection.",
-      inputSchema: { type: "object", properties: {} }
+      inputSchema: { type: "object", properties: {} },
     },
     {
       name: "comments_get",
-      description: "Read comments from a page, or the active page when pageId is omitted.",
+      description:
+        "Read comments from a page, or the active page when pageId is omitted.",
       inputSchema: {
         type: "object",
         properties: {
-          pageId: { type: "string" }
-        }
-      }
+          pageId: { type: "string" },
+        },
+      },
     },
     {
       name: "patch_apply",
@@ -70,28 +77,30 @@ export function mcpTools() {
           pageId: { type: "string" },
           patch: { type: "object" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["patch"]
-      }
+        required: ["patch"],
+      },
     },
     {
       name: "patches_apply",
-      description: "Apply multiple Geometry AST patches to a page document in one revision update.",
+      description:
+        "Apply multiple Geometry AST patches to a page document in one revision update.",
       inputSchema: {
         type: "object",
         properties: {
           pageId: { type: "string" },
           patches: { type: "array", items: { type: "object" } },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["patches"]
-      }
+        required: ["patches"],
+      },
     },
     {
       name: "node_insert",
-      description: "Insert a Geometry AST node into a document. Defaults parentId to root.",
+      description:
+        "Insert a Geometry AST node into a document. Defaults parentId to root.",
       inputSchema: {
         type: "object",
         properties: {
@@ -100,10 +109,10 @@ export function mcpTools() {
           node: { type: "object" },
           index: { type: "number" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["node"]
-      }
+        required: ["node"],
+      },
     },
     {
       name: "node_update",
@@ -115,10 +124,10 @@ export function mcpTools() {
           target: { type: "string" },
           changes: { type: "object" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["target", "changes"]
-      }
+        required: ["target", "changes"],
+      },
     },
     {
       name: "node_delete",
@@ -129,10 +138,10 @@ export function mcpTools() {
           pageId: { type: "string" },
           target: { type: "string" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["target"]
-      }
+        required: ["target"],
+      },
     },
     {
       name: "node_move",
@@ -145,24 +154,42 @@ export function mcpTools() {
           dx: { type: "number" },
           dy: { type: "number" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["target", "dx", "dy"]
-      }
+        required: ["target", "dx", "dy"],
+      },
     },
     {
       name: "document_update",
-      description: "Update active document metadata such as name, width, or height.",
+      description:
+        "Update active document metadata such as name, SVG output width/height, or viewBox.",
       inputSchema: {
         type: "object",
         properties: {
           pageId: { type: "string" },
-          changes: { type: "object" },
+          changes: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              width: { type: "number" },
+              height: { type: "number" },
+              viewBox: {
+                type: "object",
+                properties: {
+                  x: { type: "number" },
+                  y: { type: "number" },
+                  width: { type: "number" },
+                  height: { type: "number" },
+                },
+                required: ["x", "y", "width", "height"],
+              },
+            },
+          },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["changes"]
-      }
+        required: ["changes"],
+      },
     },
     {
       name: "path_create",
@@ -178,10 +205,10 @@ export function mcpTools() {
           closed: { type: "boolean" },
           style: { type: "object" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["id", "start"]
-      }
+        required: ["id", "start"],
+      },
     },
     {
       name: "path_segment_append",
@@ -193,10 +220,10 @@ export function mcpTools() {
           target: { type: "string" },
           segment: { type: "object" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["target", "segment"]
-      }
+        required: ["target", "segment"],
+      },
     },
     {
       name: "path_segment_update",
@@ -209,10 +236,10 @@ export function mcpTools() {
           index: { type: "number" },
           segment: { type: "object" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["target", "index", "segment"]
-      }
+        required: ["target", "index", "segment"],
+      },
     },
     {
       name: "path_segment_delete",
@@ -224,10 +251,10 @@ export function mcpTools() {
           target: { type: "string" },
           index: { type: "number" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["target", "index"]
-      }
+        required: ["target", "index"],
+      },
     },
     {
       name: "path_set_closed",
@@ -239,10 +266,10 @@ export function mcpTools() {
           target: { type: "string" },
           closed: { type: "boolean" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["target", "closed"]
-      }
+        required: ["target", "closed"],
+      },
     },
     {
       name: "page_add",
@@ -254,9 +281,9 @@ export function mcpTools() {
           width: { type: "number" },
           height: { type: "number" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
-        }
-      }
+          dryRun: { type: "boolean" },
+        },
+      },
     },
     {
       name: "page_duplicate",
@@ -266,9 +293,9 @@ export function mcpTools() {
         properties: {
           pageId: { type: "string" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
-        }
-      }
+          dryRun: { type: "boolean" },
+        },
+      },
     },
     {
       name: "page_delete",
@@ -278,10 +305,10 @@ export function mcpTools() {
         properties: {
           pageId: { type: "string" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["pageId"]
-      }
+        required: ["pageId"],
+      },
     },
     {
       name: "page_set_active",
@@ -291,10 +318,10 @@ export function mcpTools() {
         properties: {
           pageId: { type: "string" },
           revision: { type: "string" },
-          dryRun: { type: "boolean" }
+          dryRun: { type: "boolean" },
         },
-        required: ["pageId"]
-      }
+        required: ["pageId"],
+      },
     },
     {
       name: "svg_export",
@@ -302,9 +329,9 @@ export function mcpTools() {
       inputSchema: {
         type: "object",
         properties: {
-          pageId: { type: "string" }
-        }
-      }
+          pageId: { type: "string" },
+        },
+      },
     },
     {
       name: "project_save",
@@ -312,35 +339,57 @@ export function mcpTools() {
       inputSchema: {
         type: "object",
         properties: {
-          revision: { type: "string" }
-        }
-      }
-    }
+          revision: { type: "string" },
+        },
+      },
+    },
   ];
 }
 
-export function callMcpTool(context: ToolContext, name: string, args: Record<string, unknown>) {
+export function callMcpTool(
+  context: ToolContext,
+  name: string,
+  args: Record<string, unknown>,
+) {
   switch (name) {
     case "project_get":
-      return mcpText({ ok: true, project: context.store.readProject(), revision: context.store.revision() });
+      return mcpText({
+        ok: true,
+        project: context.store.readProject(),
+        revision: context.store.revision(),
+      });
     case "pages_list":
       return mcpText({
         ok: true,
         activePageId: context.store.readProject().activePageId,
         pages: context.store.readProject().pages.map(pageSummary),
-        revision: context.store.revision()
+        revision: context.store.revision(),
       });
     case "document_get": {
       const project = context.store.readProject();
       const page = pageByOptionalId(project, optionalString(args.pageId));
-      return mcpText({ ok: true, pageId: page.id, document: page.document, revision: context.store.revision() });
+      return mcpText({
+        ok: true,
+        pageId: page.id,
+        document: page.document,
+        revision: context.store.revision(),
+      });
     }
     case "selection_get":
-      return mcpText({ ok: true, selection: context.store.selection(), revision: context.store.revision() });
+      return mcpText({
+        ok: true,
+        selection: context.store.selection(),
+        revision: context.store.revision(),
+      });
     case "comments_get": {
       const project = context.store.readProject();
       const page = pageByOptionalId(project, optionalString(args.pageId));
-      return mcpText({ ok: true, pageId: page.id, comments: page.document.comments, revision: context.store.revision() });
+      return mcpText({
+        ok: true,
+        pageId: page.id,
+        comments: page.document.comments,
+        revision: context.store.revision(),
+      });
     }
     case "patch_apply":
       return mcpText(applyPatchTool(context, args));
@@ -377,7 +426,12 @@ export function callMcpTool(context: ToolContext, name: string, args: Record<str
     case "svg_export": {
       const project = context.store.readProject();
       const page = pageByOptionalId(project, optionalString(args.pageId));
-      return mcpText({ ok: true, pageId: page.id, svg: exportToSvg(page.document), revision: context.store.revision() });
+      return mcpText({
+        ok: true,
+        pageId: page.id,
+        svg: exportToSvg(page.document),
+        revision: context.store.revision(),
+      });
     }
     case "project_save": {
       assertRevision(context, optionalString(args.revision));
@@ -423,8 +477,8 @@ function nodeInsertTool(context: ToolContext, args: Record<string, unknown>) {
       op: "insert",
       parentId: optionalString(args.parentId) ?? "root",
       node,
-      index: optionalNumber(args.index)
-    }
+      index: optionalNumber(args.index),
+    },
   ]);
 }
 
@@ -433,8 +487,8 @@ function nodeUpdateTool(context: ToolContext, args: Record<string, unknown>) {
     {
       op: "update",
       target: requiredString(args.target, "target"),
-      changes: requiredRecord(args.changes, "changes") as Partial<GeometryNode>
-    }
+      changes: requiredRecord(args.changes, "changes") as Partial<GeometryNode>,
+    },
   ]);
 }
 
@@ -442,8 +496,8 @@ function nodeDeleteTool(context: ToolContext, args: Record<string, unknown>) {
   return applyPatchOperations(context, args, [
     {
       op: "delete",
-      target: requiredString(args.target, "target")
-    }
+      target: requiredString(args.target, "target"),
+    },
   ]);
 }
 
@@ -453,17 +507,25 @@ function nodeMoveTool(context: ToolContext, args: Record<string, unknown>) {
       op: "move",
       target: requiredString(args.target, "target"),
       dx: requiredNumber(args.dx, "dx"),
-      dy: requiredNumber(args.dy, "dy")
-    }
+      dy: requiredNumber(args.dy, "dy"),
+    },
   ]);
 }
 
-function documentUpdateTool(context: ToolContext, args: Record<string, unknown>) {
+function documentUpdateTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
   return applyPatchOperations(context, args, [
     {
       op: "updateDocument",
-      changes: requiredRecord(args.changes, "changes") as Partial<Pick<GeometryDocument, "background" | "name" | "width" | "height">>
-    }
+      changes: requiredRecord(args.changes, "changes") as Partial<
+        Pick<
+          GeometryDocument,
+          "background" | "name" | "width" | "height" | "viewBox"
+        >
+      >,
+    },
   ]);
 }
 
@@ -476,19 +538,22 @@ function pathCreateTool(context: ToolContext, args: Record<string, unknown>) {
     start: requiredPoint(args.start, "start"),
     closed: args.closed === true,
     segments,
-    ...(style ? { style } : {})
+    ...(style ? { style } : {}),
   };
 
   return applyPatchOperations(context, args, [
     {
       op: "insert",
       parentId: optionalString(args.parentId) ?? "root",
-      node
-    }
+      node,
+    },
   ]);
 }
 
-function pathSegmentAppendTool(context: ToolContext, args: Record<string, unknown>) {
+function pathSegmentAppendTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
   const path = readPathNode(context, args);
   const segment = requiredSegment(args.segment, "segment");
 
@@ -498,17 +563,22 @@ function pathSegmentAppendTool(context: ToolContext, args: Record<string, unknow
       target: path.id,
       changes: {
         segments: [...path.segments, segment],
-        spline: undefined
-      } as Partial<PathNode>
-    }
+        spline: undefined,
+      } as Partial<PathNode>,
+    },
   ]);
 }
 
-function pathSegmentUpdateTool(context: ToolContext, args: Record<string, unknown>) {
+function pathSegmentUpdateTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
   const path = readPathNode(context, args);
   const index = requiredIndex(args.index, path.segments.length, "index");
   const segment = requiredSegment(args.segment, "segment");
-  const segments = path.segments.map((current, currentIndex) => currentIndex === index ? segment : current);
+  const segments = path.segments.map((current, currentIndex) =>
+    currentIndex === index ? segment : current,
+  );
 
   return applyPatchOperations(context, args, [
     {
@@ -516,16 +586,21 @@ function pathSegmentUpdateTool(context: ToolContext, args: Record<string, unknow
       target: path.id,
       changes: {
         segments,
-        spline: undefined
-      } as Partial<PathNode>
-    }
+        spline: undefined,
+      } as Partial<PathNode>,
+    },
   ]);
 }
 
-function pathSegmentDeleteTool(context: ToolContext, args: Record<string, unknown>) {
+function pathSegmentDeleteTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
   const path = readPathNode(context, args);
   const index = requiredIndex(args.index, path.segments.length, "index");
-  const segments = path.segments.filter((_, currentIndex) => currentIndex !== index);
+  const segments = path.segments.filter(
+    (_, currentIndex) => currentIndex !== index,
+  );
 
   return applyPatchOperations(context, args, [
     {
@@ -533,13 +608,16 @@ function pathSegmentDeleteTool(context: ToolContext, args: Record<string, unknow
       target: path.id,
       changes: {
         segments,
-        spline: undefined
-      } as Partial<PathNode>
-    }
+        spline: undefined,
+      } as Partial<PathNode>,
+    },
   ]);
 }
 
-function pathSetClosedTool(context: ToolContext, args: Record<string, unknown>) {
+function pathSetClosedTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
   if (typeof args.closed !== "boolean") {
     throw new Error("closed must be a boolean.");
   }
@@ -551,21 +629,26 @@ function pathSetClosedTool(context: ToolContext, args: Record<string, unknown>) 
       op: "update",
       target: path.id,
       changes: {
-        closed: args.closed
-      } as Partial<PathNode>
-    }
+        closed: args.closed,
+      } as Partial<PathNode>,
+    },
   ]);
 }
 
-function applyPatchOperations(context: ToolContext, args: Record<string, unknown>, patches: PatchOperation[]) {
+function applyPatchOperations(
+  context: ToolContext,
+  args: Record<string, unknown>,
+  patches: PatchOperation[],
+) {
   assertRevision(context, optionalString(args.revision));
 
   const dryRun = args.dryRun === true;
   const project = context.store.readProject();
   const page = pageByOptionalId(project, optionalString(args.pageId));
-  const nextDocument = patches.length === 1
-    ? applyPatch(page.document, patches[0]!)
-    : applyPatches(page.document, patches);
+  const nextDocument =
+    patches.length === 1
+      ? applyPatch(page.document, patches[0]!)
+      : applyPatches(page.document, patches);
   const nextProject = updatePageDocument(project, page.id, nextDocument);
 
   if (dryRun) {
@@ -575,7 +658,7 @@ function applyPatchOperations(context: ToolContext, args: Record<string, unknown
       pageId: page.id,
       patches,
       document: nextDocument,
-      revision: context.store.revision()
+      revision: context.store.revision(),
     };
   }
 
@@ -587,11 +670,14 @@ function applyPatchOperations(context: ToolContext, args: Record<string, unknown
     pageId: page.id,
     patches,
     document: nextDocument,
-    revision: change.revision
+    revision: change.revision,
   };
 }
 
-function readPathNode(context: ToolContext, args: Record<string, unknown>): PathNode {
+function readPathNode(
+  context: ToolContext,
+  args: Record<string, unknown>,
+): PathNode {
   const project = context.store.readProject();
   const page = pageByOptionalId(project, optionalString(args.pageId));
   const target = requiredString(args.target, "target");
@@ -618,23 +704,32 @@ function pageAddTool(context: ToolContext, args: Record<string, unknown>) {
     pageId,
     name: optionalString(args.name) ?? `Page ${project.pages.length + 1}`,
     width: optionalNumber(args.width) ?? activePage.document.width,
-    height: optionalNumber(args.height) ?? activePage.document.height
+    height: optionalNumber(args.height) ?? activePage.document.height,
   });
   const nextProject = touchProject({
     ...project,
     activePageId: page.id,
-    pages: [...project.pages, page]
+    pages: [...project.pages, page],
   });
 
   if (args.dryRun === true) {
-    return { ok: true, dryRun: true, page, project: nextProject, revision: context.store.revision() };
+    return {
+      ok: true,
+      dryRun: true,
+      page,
+      project: nextProject,
+      revision: context.store.revision(),
+    };
   }
 
   const change = context.store.writeProject(nextProject);
   return { ok: true, dryRun: false, page, revision: change.revision };
 }
 
-function pageDuplicateTool(context: ToolContext, args: Record<string, unknown>) {
+function pageDuplicateTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
   assertRevision(context, optionalString(args.revision));
 
   const project = context.store.readProject();
@@ -648,16 +743,22 @@ function pageDuplicateTool(context: ToolContext, args: Record<string, unknown>) 
   const page = {
     id: pageId,
     name: document.name,
-    document
+    document,
   };
   const nextProject = touchProject({
     ...project,
     activePageId: pageId,
-    pages: [...project.pages, page]
+    pages: [...project.pages, page],
   });
 
   if (args.dryRun === true) {
-    return { ok: true, dryRun: true, page, project: nextProject, revision: context.store.revision() };
+    return {
+      ok: true,
+      dryRun: true,
+      page,
+      project: nextProject,
+      revision: context.store.revision(),
+    };
   }
 
   const change = context.store.writeProject(nextProject);
@@ -679,18 +780,27 @@ function pageDeleteTool(context: ToolContext, args: Record<string, unknown>) {
   }
 
   const pages = project.pages.filter((page) => page.id !== pageId);
-  const activePageId = project.activePageId === pageId ? pages[0]!.id : project.activePageId;
+  const activePageId =
+    project.activePageId === pageId ? pages[0]!.id : project.activePageId;
   const nextProject = touchProject({ ...project, activePageId, pages });
 
   if (args.dryRun === true) {
-    return { ok: true, dryRun: true, project: nextProject, revision: context.store.revision() };
+    return {
+      ok: true,
+      dryRun: true,
+      project: nextProject,
+      revision: context.store.revision(),
+    };
   }
 
   const change = context.store.writeProject(nextProject);
   return { ok: true, dryRun: false, revision: change.revision };
 }
 
-function pageSetActiveTool(context: ToolContext, args: Record<string, unknown>) {
+function pageSetActiveTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
   assertRevision(context, optionalString(args.revision));
 
   const pageId = requiredString(args.pageId, "pageId");
@@ -703,20 +813,36 @@ function pageSetActiveTool(context: ToolContext, args: Record<string, unknown>) 
   const nextProject = touchProject({ ...project, activePageId: pageId });
 
   if (args.dryRun === true) {
-    return { ok: true, dryRun: true, project: nextProject, revision: context.store.revision() };
+    return {
+      ok: true,
+      dryRun: true,
+      project: nextProject,
+      revision: context.store.revision(),
+    };
   }
 
   const change = context.store.writeProject(nextProject);
-  return { ok: true, dryRun: false, activePageId: pageId, revision: change.revision };
+  return {
+    ok: true,
+    dryRun: false,
+    activePageId: pageId,
+    revision: change.revision,
+  };
 }
 
 function assertRevision(context: ToolContext, revision: string | undefined) {
   if (revision && revision !== context.store.revision()) {
-    throw new Error(`Revision mismatch. Current revision is ${context.store.revision()}.`);
+    throw new Error(
+      `Revision mismatch. Current revision is ${context.store.revision()}.`,
+    );
   }
 }
 
-function updatePageDocument(project: GlyphSmithProject, pageId: string, document: GeometryDocument): GlyphSmithProject {
+function updatePageDocument(
+  project: GlyphSmithProject,
+  pageId: string,
+  document: GeometryDocument,
+): GlyphSmithProject {
   return touchProject({
     ...project,
     pages: project.pages.map((page) =>
@@ -724,14 +850,17 @@ function updatePageDocument(project: GlyphSmithProject, pageId: string, document
         ? {
             ...page,
             name: document.name,
-            document
+            document,
           }
-        : page
-    )
+        : page,
+    ),
   });
 }
 
-function findNode(node: GeometryNode, target: string): GeometryNode | undefined {
+function findNode(
+  node: GeometryNode,
+  target: string,
+): GeometryNode | undefined {
   if (node.id === target) {
     return node;
   }
@@ -754,17 +883,23 @@ function findNode(node: GeometryNode, target: string): GeometryNode | undefined 
 function touchProject(project: GlyphSmithProject): GlyphSmithProject {
   return {
     ...project,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   };
 }
 
-function pageByOptionalId(project: GlyphSmithProject, pageId?: string): GlyphSmithPage {
+function pageByOptionalId(
+  project: GlyphSmithProject,
+  pageId?: string,
+): GlyphSmithPage {
   const page = pageId
     ? project.pages.find((item) => item.id === pageId)
-    : project.pages.find((item) => item.id === project.activePageId) ?? project.pages[0];
+    : (project.pages.find((item) => item.id === project.activePageId) ??
+      project.pages[0]);
 
   if (!page) {
-    throw new Error(pageId ? `Unknown pageId: ${pageId}` : "Project has no pages.");
+    throw new Error(
+      pageId ? `Unknown pageId: ${pageId}` : "Project has no pages.",
+    );
   }
 
   return page;
@@ -776,8 +911,9 @@ function pageSummary(page: GlyphSmithPage) {
     name: page.name,
     width: page.document.width,
     height: page.document.height,
+    viewBox: getDocumentViewBox(page.document),
     nodeCount: page.document.root.children.length,
-    commentCount: page.document.comments.length
+    commentCount: page.document.comments.length,
   };
 }
 
@@ -792,7 +928,12 @@ function nextPageId(project: GlyphSmithProject): string {
 }
 
 function isPatchOperation(value: unknown): value is PatchOperation {
-  return Boolean(value && typeof value === "object" && "op" in value && typeof value.op === "string");
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    "op" in value &&
+    typeof value.op === "string",
+  );
 }
 
 function isGeometryNode(value: unknown): value is GeometryNode {
@@ -827,7 +968,9 @@ function optionalSegments(value: unknown): Segment[] {
     throw new Error("segments must be an array.");
   }
 
-  return value.map((segment, index) => requiredSegment(segment, `segments[${index}]`));
+  return value.map((segment, index) =>
+    requiredSegment(segment, `segments[${index}]`),
+  );
 }
 
 function requiredSegment(value: unknown, name: string): Segment {
@@ -837,7 +980,7 @@ function requiredSegment(value: unknown, name: string): Segment {
   if (type === "line") {
     return {
       type,
-      to: requiredPoint(segment.to, `${name}.to`)
+      to: requiredPoint(segment.to, `${name}.to`),
     };
   }
 
@@ -845,7 +988,7 @@ function requiredSegment(value: unknown, name: string): Segment {
     return {
       type,
       control: requiredPoint(segment.control, `${name}.control`),
-      to: requiredPoint(segment.to, `${name}.to`)
+      to: requiredPoint(segment.to, `${name}.to`),
     };
   }
 
@@ -854,7 +997,7 @@ function requiredSegment(value: unknown, name: string): Segment {
       type,
       control1: requiredPoint(segment.control1, `${name}.control1`),
       control2: requiredPoint(segment.control2, `${name}.control2`),
-      to: requiredPoint(segment.to, `${name}.to`)
+      to: requiredPoint(segment.to, `${name}.to`),
     };
   }
 
@@ -866,7 +1009,7 @@ function requiredSegment(value: unknown, name: string): Segment {
       xAxisRotation: optionalNumber(segment.xAxisRotation) ?? 0,
       largeArc: requiredBoolean(segment.largeArc, `${name}.largeArc`),
       sweep: requiredBoolean(segment.sweep, `${name}.sweep`),
-      to: requiredPoint(segment.to, `${name}.to`)
+      to: requiredPoint(segment.to, `${name}.to`),
     };
   }
 
@@ -878,7 +1021,7 @@ function requiredPoint(value: unknown, name: string): Point {
 
   return {
     x: requiredNumber(point.x, `${name}.x`),
-    y: requiredNumber(point.y, `${name}.y`)
+    y: requiredNumber(point.y, `${name}.y`),
   };
 }
 
@@ -914,7 +1057,9 @@ function requiredIndex(value: unknown, length: number, name: string): number {
   const index = requiredNumber(value, name);
 
   if (!Number.isInteger(index) || index < 0 || index >= length) {
-    throw new Error(`${name} must be an integer from 0 to ${Math.max(0, length - 1)}.`);
+    throw new Error(
+      `${name} must be an integer from 0 to ${Math.max(0, length - 1)}.`,
+    );
   }
 
   return index;
@@ -937,7 +1082,9 @@ function optionalRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function optionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 export function mcpText(value: unknown, isError = false) {
@@ -945,9 +1092,10 @@ export function mcpText(value: unknown, isError = false) {
     content: [
       {
         type: "text",
-        text: typeof value === "string" ? value : JSON.stringify(value, null, 2)
-      }
+        text:
+          typeof value === "string" ? value : JSON.stringify(value, null, 2),
+      },
     ],
-    isError
+    isError,
   };
 }

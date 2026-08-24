@@ -1,19 +1,22 @@
 import {
   createDocument,
+  getDocumentViewBox,
   type GeometryDocument,
   type GeometryNode,
   type NodeStyle,
   type Point,
-  type Segment
+  type Segment,
+  type ViewBox,
 } from "@glyphsmith/ast";
 
 export function exportToSvg(document: GeometryDocument): string {
   const children = document.root.children.map(renderNode).join("");
+  const viewBox = getDocumentViewBox(document);
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${formatNumber(document.width)}" height="${formatNumber(document.height)}" viewBox="0 0 ${formatNumber(document.width)} ${formatNumber(document.height)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${formatNumber(document.width)}" height="${formatNumber(document.height)}" viewBox="${formatNumber(viewBox.x)} ${formatNumber(viewBox.y)} ${formatNumber(viewBox.width)} ${formatNumber(viewBox.height)}">`,
     children,
-    "</svg>"
+    "</svg>",
   ].join("");
 }
 
@@ -30,17 +33,20 @@ export function importFromSvg(svgText: string): GeometryDocument {
     throw new Error("Invalid SVG.");
   }
 
-  const svg = parsed.documentElement.localName.toLowerCase() === "svg"
-    ? parsed.documentElement
-    : parsed.querySelector("svg");
+  const svg =
+    parsed.documentElement.localName.toLowerCase() === "svg"
+      ? parsed.documentElement
+      : parsed.querySelector("svg");
 
   if (!svg) {
     throw new Error("SVG root element was not found.");
   }
 
   const viewBox = parseViewBox(svg.getAttribute("viewBox"));
-  const width = parseLength(svg.getAttribute("width")) ?? viewBox?.width ?? 1024;
-  const height = parseLength(svg.getAttribute("height")) ?? viewBox?.height ?? 768;
+  const width =
+    parseLength(svg.getAttribute("width")) ?? viewBox?.width ?? 1024;
+  const height =
+    parseLength(svg.getAttribute("height")) ?? viewBox?.height ?? 768;
   const ids = new Set<string>();
   const context: SvgImportContext = {
     ids,
@@ -68,22 +74,24 @@ export function importFromSvg(svgText: string): GeometryDocument {
 
       ids.add(id);
       return id;
-    }
+    },
   };
   const children = parseSvgChildren(svg, context, parseNodeStyle(svg, {}));
   const document = createDocument({
     id: context.nextId("document"),
-    name: svg.getAttribute("data-name") ?? svg.getAttribute("id") ?? "Imported SVG",
+    name:
+      svg.getAttribute("data-name") ?? svg.getAttribute("id") ?? "Imported SVG",
     width,
-    height
+    height,
+    viewBox,
   });
 
   return {
     ...document,
     root: {
       ...document.root,
-      children
-    }
+      children,
+    },
   };
 }
 
@@ -99,18 +107,17 @@ type PathSubpath = {
   start: Point;
 };
 
-type SvgViewBox = {
-  height: number;
-  width: number;
-};
-
 const svgDefaultStyle: NodeStyle = {
   fill: "#000000",
   stroke: "none",
-  strokeWidth: 1
+  strokeWidth: 1,
 };
 
-function parseSvgChildren(parent: Element, context: SvgImportContext, inheritedStyle: NodeStyle): GeometryNode[] {
+function parseSvgChildren(
+  parent: Element,
+  context: SvgImportContext,
+  inheritedStyle: NodeStyle,
+): GeometryNode[] {
   const nodes: GeometryNode[] = [];
 
   for (const child of parent.children) {
@@ -120,29 +127,43 @@ function parseSvgChildren(parent: Element, context: SvgImportContext, inheritedS
   return nodes;
 }
 
-function parseSvgElement(element: Element, context: SvgImportContext, inheritedStyle: NodeStyle): GeometryNode[] {
+function parseSvgElement(
+  element: Element,
+  context: SvgImportContext,
+  inheritedStyle: NodeStyle,
+): GeometryNode[] {
   const tagName = element.localName.toLowerCase();
 
-  if (tagName === "defs" || tagName === "metadata" || tagName === "title" || tagName === "desc") {
+  if (
+    tagName === "defs" ||
+    tagName === "metadata" ||
+    tagName === "title" ||
+    tagName === "desc"
+  ) {
     return [];
   }
 
   const style = parseNodeStyle(element, inheritedStyle);
-  const name = element.getAttribute("data-name") ?? element.getAttribute("aria-label") ?? undefined;
+  const name =
+    element.getAttribute("data-name") ??
+    element.getAttribute("aria-label") ??
+    undefined;
   const common = {
     id: context.reserveId(element.getAttribute("id"), tagName),
     name,
-    style
+    style,
   };
 
   switch (tagName) {
     case "g":
     case "svg": {
-      return [{
-        ...common,
-        type: "group",
-        children: parseSvgChildren(element, context, style)
-      }];
+      return [
+        {
+          ...common,
+          type: "group",
+          children: parseSvgChildren(element, context, style),
+        },
+      ];
     }
     case "rect": {
       const x = parseLength(element.getAttribute("x")) ?? 0;
@@ -154,16 +175,18 @@ function parseSvgElement(element: Element, context: SvgImportContext, inheritedS
         return [];
       }
 
-      return [{
-        ...common,
-        type: "rect",
-        x,
-        y,
-        width,
-        height,
-        rx: parseLength(element.getAttribute("rx")) ?? undefined,
-        ry: parseLength(element.getAttribute("ry")) ?? undefined
-      }];
+      return [
+        {
+          ...common,
+          type: "rect",
+          x,
+          y,
+          width,
+          height,
+          rx: parseLength(element.getAttribute("rx")) ?? undefined,
+          ry: parseLength(element.getAttribute("ry")) ?? undefined,
+        },
+      ];
     }
     case "circle": {
       const r = parseLength(element.getAttribute("r")) ?? 0;
@@ -172,13 +195,15 @@ function parseSvgElement(element: Element, context: SvgImportContext, inheritedS
         return [];
       }
 
-      return [{
-        ...common,
-        type: "circle",
-        cx: parseLength(element.getAttribute("cx")) ?? 0,
-        cy: parseLength(element.getAttribute("cy")) ?? 0,
-        r
-      }];
+      return [
+        {
+          ...common,
+          type: "circle",
+          cx: parseLength(element.getAttribute("cx")) ?? 0,
+          cy: parseLength(element.getAttribute("cy")) ?? 0,
+          r,
+        },
+      ];
     }
     case "ellipse": {
       const rx = parseLength(element.getAttribute("rx")) ?? 0;
@@ -188,41 +213,53 @@ function parseSvgElement(element: Element, context: SvgImportContext, inheritedS
         return [];
       }
 
-      return [{
-        ...common,
-        type: "ellipse",
-        cx: parseLength(element.getAttribute("cx")) ?? 0,
-        cy: parseLength(element.getAttribute("cy")) ?? 0,
-        rx,
-        ry
-      }];
+      return [
+        {
+          ...common,
+          type: "ellipse",
+          cx: parseLength(element.getAttribute("cx")) ?? 0,
+          cy: parseLength(element.getAttribute("cy")) ?? 0,
+          rx,
+          ry,
+        },
+      ];
     }
     case "line":
-      return [{
-        ...common,
-        type: "line",
-        x1: parseLength(element.getAttribute("x1")) ?? 0,
-        y1: parseLength(element.getAttribute("y1")) ?? 0,
-        x2: parseLength(element.getAttribute("x2")) ?? 0,
-        y2: parseLength(element.getAttribute("y2")) ?? 0
-      }];
+      return [
+        {
+          ...common,
+          type: "line",
+          x1: parseLength(element.getAttribute("x1")) ?? 0,
+          y1: parseLength(element.getAttribute("y1")) ?? 0,
+          x2: parseLength(element.getAttribute("x2")) ?? 0,
+          y2: parseLength(element.getAttribute("y2")) ?? 0,
+        },
+      ];
     case "polygon": {
       const points = parsePoints(element.getAttribute("points"));
 
-      return points.length < 3 ? [] : [{
-        ...common,
-        type: "polygon",
-        points
-      }];
+      return points.length < 3
+        ? []
+        : [
+            {
+              ...common,
+              type: "polygon",
+              points,
+            },
+          ];
     }
     case "polyline": {
       const points = parsePoints(element.getAttribute("points"));
 
-      return points.length < 2 ? [] : [{
-        ...common,
-        type: "polyline",
-        points
-      }];
+      return points.length < 2
+        ? []
+        : [
+            {
+              ...common,
+              type: "polyline",
+              points,
+            },
+          ];
     }
     case "path": {
       const subpaths = parsePathData(element.getAttribute("d") ?? "");
@@ -233,7 +270,7 @@ function parseSvgElement(element: Element, context: SvgImportContext, inheritedS
         type: "path",
         start: subpath.start,
         closed: subpath.closed,
-        segments: subpath.segments
+        segments: subpath.segments,
       }));
     }
     case "text": {
@@ -243,36 +280,42 @@ function parseSvgElement(element: Element, context: SvgImportContext, inheritedS
         return [];
       }
 
-      return [{
-        ...common,
-        type: "text",
-        x: parseLength(element.getAttribute("x")) ?? 0,
-        y: parseLength(element.getAttribute("y")) ?? 0,
-        text,
-        fill: style.fill,
-        opacity: style.opacity,
-        stroke: style.stroke,
-        strokeWidth: style.strokeWidth,
-        fontFamily: styleValue(element, "font-family"),
-        fontSize: parseLength(styleValue(element, "font-size") ?? null),
-        fontStyle: textFontStyle(styleValue(element, "font-style")),
-        fontWeight: styleValue(element, "font-weight"),
-        textAnchor: textAnchorValue(styleValue(element, "text-anchor")),
-        dominantBaseline: styleValue(element, "dominant-baseline")
-      }];
+      return [
+        {
+          ...common,
+          type: "text",
+          x: parseLength(element.getAttribute("x")) ?? 0,
+          y: parseLength(element.getAttribute("y")) ?? 0,
+          text,
+          fill: style.fill,
+          opacity: style.opacity,
+          stroke: style.stroke,
+          strokeWidth: style.strokeWidth,
+          fontFamily: styleValue(element, "font-family"),
+          fontSize: parseLength(styleValue(element, "font-size") ?? null),
+          fontStyle: textFontStyle(styleValue(element, "font-style")),
+          fontWeight: styleValue(element, "font-weight"),
+          textAnchor: textAnchorValue(styleValue(element, "text-anchor")),
+          dominantBaseline: styleValue(element, "dominant-baseline"),
+        },
+      ];
     }
     default:
       return [];
   }
 }
 
-function parseNodeStyle(element: Element, inheritedStyle: NodeStyle): NodeStyle {
+function parseNodeStyle(
+  element: Element,
+  inheritedStyle: NodeStyle,
+): NodeStyle {
   const inlineStyle = parseInlineStyle(element.getAttribute("style"));
   const style: NodeStyle = {
     ...svgDefaultStyle,
-    ...inheritedStyle
+    ...inheritedStyle,
   };
-  const read = (name: string) => inlineStyle.get(name) ?? element.getAttribute(name);
+  const read = (name: string) =>
+    inlineStyle.get(name) ?? element.getAttribute(name);
   const fill = read("fill");
   const stroke = read("stroke");
   const strokeWidth = read("stroke-width");
@@ -295,7 +338,11 @@ function parseNodeStyle(element: Element, inheritedStyle: NodeStyle): NodeStyle 
     style.strokeWidth = parseLength(strokeWidth) ?? style.strokeWidth;
   }
 
-  if (strokeLinecap === "butt" || strokeLinecap === "round" || strokeLinecap === "square") {
+  if (
+    strokeLinecap === "butt" ||
+    strokeLinecap === "round" ||
+    strokeLinecap === "square"
+  ) {
     style.strokeLinecap = strokeLinecap;
   }
 
@@ -310,7 +357,8 @@ function parseNodeStyle(element: Element, inheritedStyle: NodeStyle): NodeStyle 
   }
 
   if (strokeMiterlimit) {
-    style.strokeMiterlimit = parseLength(strokeMiterlimit) ?? style.strokeMiterlimit;
+    style.strokeMiterlimit =
+      parseLength(strokeMiterlimit) ?? style.strokeMiterlimit;
   }
 
   if (strokeDasharray) {
@@ -318,7 +366,8 @@ function parseNodeStyle(element: Element, inheritedStyle: NodeStyle): NodeStyle 
   }
 
   if (strokeDashoffset) {
-    style.strokeDashoffset = parseLength(strokeDashoffset) ?? style.strokeDashoffset;
+    style.strokeDashoffset =
+      parseLength(strokeDashoffset) ?? style.strokeDashoffset;
   }
 
   if (opacity) {
@@ -344,7 +393,7 @@ function parseInlineStyle(style: string | null): Map<string, string> {
 
     entries.set(
       declaration.slice(0, separator).trim(),
-      declaration.slice(separator + 1).trim()
+      declaration.slice(separator + 1).trim(),
     );
   }
 
@@ -352,19 +401,36 @@ function parseInlineStyle(style: string | null): Map<string, string> {
 }
 
 function styleValue(element: Element, name: string): string | undefined {
-  return parseInlineStyle(element.getAttribute("style")).get(name) ?? element.getAttribute(name) ?? undefined;
+  return (
+    parseInlineStyle(element.getAttribute("style")).get(name) ??
+    element.getAttribute(name) ??
+    undefined
+  );
 }
 
-function textFontStyle(value: string | undefined): "normal" | "italic" | undefined {
-  return value === "italic" ? "italic" : value === "normal" ? "normal" : undefined;
+function textFontStyle(
+  value: string | undefined,
+): "normal" | "italic" | undefined {
+  return value === "italic"
+    ? "italic"
+    : value === "normal"
+      ? "normal"
+      : undefined;
 }
 
-function textAnchorValue(value: string | undefined): "start" | "middle" | "end" | undefined {
-  return value === "start" || value === "middle" || value === "end" ? value : undefined;
+function textAnchorValue(
+  value: string | undefined,
+): "start" | "middle" | "end" | undefined {
+  return value === "start" || value === "middle" || value === "end"
+    ? value
+    : undefined;
 }
 
 function parsePathData(data: string): PathSubpath[] {
-  const tokens = data.match(/[AaCcHhLlMmQqSsTtVvZz]|[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[eE][-+]?\d+)?/g) ?? [];
+  const tokens =
+    data.match(
+      /[AaCcHhLlMmQqSsTtVvZz]|[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[eE][-+]?\d+)?/g,
+    ) ?? [];
   const subpaths: PathSubpath[] = [];
   let index = 0;
   let command = "";
@@ -375,7 +441,8 @@ function parsePathData(data: string): PathSubpath[] {
   let previousCubicControl: Point | undefined;
   let previousQuadraticControl: Point | undefined;
 
-  const isCommand = (token: string | undefined) => Boolean(token && /^[A-Za-z]$/.test(token));
+  const isCommand = (token: string | undefined) =>
+    Boolean(token && /^[A-Za-z]$/.test(token));
   const hasNumber = () => index < tokens.length && !isCommand(tokens[index]);
   const readNumber = () => Number(tokens[index++]);
   const readPoint = (relative: boolean): Point | undefined => {
@@ -400,7 +467,7 @@ function parsePathData(data: string): PathSubpath[] {
     subpaths.push({
       start,
       closed,
-      segments
+      segments,
     });
     start = undefined;
     segments = [];
@@ -554,7 +621,12 @@ function parsePathData(data: string): PathSubpath[] {
           const sweepFlag = readNumber();
           const to = readPoint(relative);
 
-          if (![rx, ry, xAxisRotation, largeArcFlag, sweepFlag].every(Number.isFinite) || !to) {
+          if (
+            ![rx, ry, xAxisRotation, largeArcFlag, sweepFlag].every(
+              Number.isFinite,
+            ) ||
+            !to
+          ) {
             break;
           }
 
@@ -565,7 +637,7 @@ function parsePathData(data: string): PathSubpath[] {
             xAxisRotation,
             largeArc: largeArcFlag !== 0,
             sweep: sweepFlag !== 0,
-            to
+            to,
           });
           current = to;
         }
@@ -584,19 +656,21 @@ function parsePathData(data: string): PathSubpath[] {
 
   finishSubpath();
 
-  return subpaths.filter((subpath) => subpath.segments.length > 0 || subpath.closed);
+  return subpaths.filter(
+    (subpath) => subpath.segments.length > 0 || subpath.closed,
+  );
 }
 
 function reflectPoint(point: Point, origin: Point): Point {
   return {
     x: origin.x * 2 - point.x,
-    y: origin.y * 2 - point.y
+    y: origin.y * 2 - point.y,
   };
 }
 
 function parseTextElementContent(element: Element): string {
   const tspans = Array.from(element.children).filter(
-    (child) => child.localName.toLowerCase() === "tspan"
+    (child) => child.localName.toLowerCase() === "tspan",
   );
 
   if (tspans.length > 0) {
@@ -611,14 +685,22 @@ function parsePoints(value: string | null): Point[] {
     return [];
   }
 
-  const numbers = value.match(/[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[eE][-+]?\d+)?/g)?.map(Number) ?? [];
+  const numbers =
+    value
+      .match(/[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[eE][-+]?\d+)?/g)
+      ?.map(Number) ?? [];
   const points: Point[] = [];
 
   for (let index = 0; index + 1 < numbers.length; index += 2) {
     const x = numbers[index];
     const y = numbers[index + 1];
 
-    if (x !== undefined && y !== undefined && Number.isFinite(x) && Number.isFinite(y)) {
+    if (
+      x !== undefined &&
+      y !== undefined &&
+      Number.isFinite(x) &&
+      Number.isFinite(y)
+    ) {
       points.push({ x, y });
     }
   }
@@ -626,17 +708,30 @@ function parsePoints(value: string | null): Point[] {
   return points;
 }
 
-function parseViewBox(value: string | null): SvgViewBox | undefined {
+function parseViewBox(value: string | null): ViewBox | undefined {
   const numbers = parseNumberList(value);
 
   if (numbers.length < 4) {
     return undefined;
   }
 
+  const x = numbers[0];
+  const y = numbers[1];
   const width = numbers[2];
   const height = numbers[3];
 
-  return width && height && width > 0 && height > 0 ? { width, height } : undefined;
+  return x !== undefined &&
+    y !== undefined &&
+    width !== undefined &&
+    height !== undefined &&
+    Number.isFinite(x) &&
+    Number.isFinite(y) &&
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width > 0 &&
+    height > 0
+    ? { x, y, width, height }
+    : undefined;
 }
 
 function parseLength(value: string | null): number | undefined {
@@ -644,14 +739,20 @@ function parseLength(value: string | null): number | undefined {
     return undefined;
   }
 
-  const match = value.trim().match(/^[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[eE][-+]?\d+)?/);
+  const match = value
+    .trim()
+    .match(/^[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[eE][-+]?\d+)?/);
   const parsed = match ? Number(match[0]) : Number.NaN;
 
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function parseNumberList(value: string | null): number[] {
-  return value?.match(/[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[eE][-+]?\d+)?/g)?.map(Number) ?? [];
+  return (
+    value
+      ?.match(/[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[eE][-+]?\d+)?/g)
+      ?.map(Number) ?? []
+  );
 }
 
 function renderNode(node: GeometryNode): string {
@@ -700,7 +801,9 @@ function renderTextNode(node: Extract<GeometryNode, { type: "text" }>): string {
   return `<text${common}>${tspans.join("")}</text>`;
 }
 
-function renderTextStyle(node: Extract<GeometryNode, { type: "text" }>): string {
+function renderTextStyle(
+  node: Extract<GeometryNode, { type: "text" }>,
+): string {
   const fill = node.style?.fill ?? node.fill ?? "#111827";
   const stroke = node.style?.stroke ?? node.stroke;
   const strokeWidth = node.style?.strokeWidth ?? node.strokeWidth;
@@ -709,38 +812,58 @@ function renderTextStyle(node: Extract<GeometryNode, { type: "text" }>): string 
   return [
     ` fill="${escapeAttribute(fill)}"`,
     stroke === undefined ? "" : ` stroke="${escapeAttribute(stroke)}"`,
-    strokeWidth === undefined ? "" : ` stroke-width="${formatNumber(strokeWidth)}"`,
-    node.fontFamily === undefined ? "" : ` font-family="${escapeAttribute(node.fontFamily)}"`,
-    node.fontSize === undefined ? "" : ` font-size="${formatNumber(node.fontSize)}"`,
-    node.fontWeight === undefined ? "" : ` font-weight="${escapeAttribute(String(node.fontWeight))}"`,
-    node.fontStyle === undefined ? "" : ` font-style="${escapeAttribute(node.fontStyle)}"`,
-    node.textAnchor === undefined ? "" : ` text-anchor="${escapeAttribute(node.textAnchor)}"`,
-    node.dominantBaseline === undefined ? "" : ` dominant-baseline="${escapeAttribute(node.dominantBaseline)}"`,
-    opacity === undefined ? "" : ` opacity="${formatNumber(opacity)}"`
+    strokeWidth === undefined
+      ? ""
+      : ` stroke-width="${formatNumber(strokeWidth)}"`,
+    node.fontFamily === undefined
+      ? ""
+      : ` font-family="${escapeAttribute(node.fontFamily)}"`,
+    node.fontSize === undefined
+      ? ""
+      : ` font-size="${formatNumber(node.fontSize)}"`,
+    node.fontWeight === undefined
+      ? ""
+      : ` font-weight="${escapeAttribute(String(node.fontWeight))}"`,
+    node.fontStyle === undefined
+      ? ""
+      : ` font-style="${escapeAttribute(node.fontStyle)}"`,
+    node.textAnchor === undefined
+      ? ""
+      : ` text-anchor="${escapeAttribute(node.textAnchor)}"`,
+    node.dominantBaseline === undefined
+      ? ""
+      : ` dominant-baseline="${escapeAttribute(node.dominantBaseline)}"`,
+    opacity === undefined ? "" : ` opacity="${formatNumber(opacity)}"`,
   ].join("");
 }
 
-function renderPathData(start: Point, segments: Segment[], closed: boolean): string {
+function renderPathData(
+  start: Point,
+  segments: Segment[],
+  closed: boolean,
+): string {
   const commands = [`M ${formatNumber(start.x)} ${formatNumber(start.y)}`];
 
   for (const segment of segments) {
     switch (segment.type) {
       case "line":
-        commands.push(`L ${formatNumber(segment.to.x)} ${formatNumber(segment.to.y)}`);
+        commands.push(
+          `L ${formatNumber(segment.to.x)} ${formatNumber(segment.to.y)}`,
+        );
         break;
       case "quadratic":
         commands.push(
-          `Q ${formatNumber(segment.control.x)} ${formatNumber(segment.control.y)} ${formatNumber(segment.to.x)} ${formatNumber(segment.to.y)}`
+          `Q ${formatNumber(segment.control.x)} ${formatNumber(segment.control.y)} ${formatNumber(segment.to.x)} ${formatNumber(segment.to.y)}`,
         );
         break;
       case "cubic":
         commands.push(
-          `C ${formatNumber(segment.control1.x)} ${formatNumber(segment.control1.y)} ${formatNumber(segment.control2.x)} ${formatNumber(segment.control2.y)} ${formatNumber(segment.to.x)} ${formatNumber(segment.to.y)}`
+          `C ${formatNumber(segment.control1.x)} ${formatNumber(segment.control1.y)} ${formatNumber(segment.control2.x)} ${formatNumber(segment.control2.y)} ${formatNumber(segment.to.x)} ${formatNumber(segment.to.y)}`,
         );
         break;
       case "arc":
         commands.push(
-          `A ${formatNumber(segment.rx)} ${formatNumber(segment.ry)} ${formatNumber(segment.xAxisRotation)} ${segment.largeArc ? 1 : 0} ${segment.sweep ? 1 : 0} ${formatNumber(segment.to.x)} ${formatNumber(segment.to.y)}`
+          `A ${formatNumber(segment.rx)} ${formatNumber(segment.ry)} ${formatNumber(segment.xAxisRotation)} ${segment.largeArc ? 1 : 0} ${segment.sweep ? 1 : 0} ${formatNumber(segment.to.x)} ${formatNumber(segment.to.y)}`,
         );
         break;
     }
@@ -768,17 +891,29 @@ function renderStyle(style: NodeStyle | undefined): string {
     ` fill="${escapeAttribute(fill)}"`,
     ` stroke="${escapeAttribute(stroke)}"`,
     ` stroke-width="${formatNumber(strokeWidth)}"`,
-    strokeLinecap === undefined ? "" : ` stroke-linecap="${escapeAttribute(strokeLinecap)}"`,
-    strokeLinejoin === undefined ? "" : ` stroke-linejoin="${escapeAttribute(strokeLinejoin)}"`,
-    strokeMiterlimit === undefined ? "" : ` stroke-miterlimit="${formatNumber(strokeMiterlimit)}"`,
-    strokeDasharray === undefined ? "" : ` stroke-dasharray="${escapeAttribute(strokeDasharray)}"`,
-    strokeDashoffset === undefined ? "" : ` stroke-dashoffset="${formatNumber(strokeDashoffset)}"`,
-    opacity === undefined ? "" : ` opacity="${formatNumber(opacity)}"`
+    strokeLinecap === undefined
+      ? ""
+      : ` stroke-linecap="${escapeAttribute(strokeLinecap)}"`,
+    strokeLinejoin === undefined
+      ? ""
+      : ` stroke-linejoin="${escapeAttribute(strokeLinejoin)}"`,
+    strokeMiterlimit === undefined
+      ? ""
+      : ` stroke-miterlimit="${formatNumber(strokeMiterlimit)}"`,
+    strokeDasharray === undefined
+      ? ""
+      : ` stroke-dasharray="${escapeAttribute(strokeDasharray)}"`,
+    strokeDashoffset === undefined
+      ? ""
+      : ` stroke-dashoffset="${formatNumber(strokeDashoffset)}"`,
+    opacity === undefined ? "" : ` opacity="${formatNumber(opacity)}"`,
   ].join("");
 }
 
 function renderPoints(points: Point[]): string {
-  return points.map((point) => `${formatNumber(point.x)},${formatNumber(point.y)}`).join(" ");
+  return points
+    .map((point) => `${formatNumber(point.x)},${formatNumber(point.y)}`)
+    .join(" ");
 }
 
 function renderId(id: string): string {
@@ -794,7 +929,9 @@ function optionalNumber(name: string, value: number | undefined): string {
 }
 
 function formatNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/\.?0+$/, "");
+  return Number.isInteger(value)
+    ? String(value)
+    : value.toFixed(3).replace(/\.?0+$/, "");
 }
 
 function escapeAttribute(value: string): string {

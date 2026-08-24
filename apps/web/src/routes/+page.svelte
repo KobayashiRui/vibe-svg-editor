@@ -2,6 +2,7 @@
 	import {
 		createPage,
 		createProject,
+		getDocumentViewBox,
 		type DocumentBackground,
 		type GeometryDocument,
 		type GeometryNode,
@@ -11,7 +12,8 @@
 		type PathNode,
 		type Point,
 		type Segment,
-		type TextNode
+		type TextNode,
+		type ViewBox
 	} from '@glyphsmith/ast';
 	import {
 		createAppendPathSegmentPatch,
@@ -24,6 +26,7 @@
 		createRectInsertPatch,
 		createTriangleInsertPatch,
 		createEditHandleUpdatePatch,
+		coordinateDecimalPlaces,
 		drawArcSegment,
 		fitViewportToDocument,
 		getPathEndTangent,
@@ -31,6 +34,7 @@
 		hitTestEditHandle,
 		panViewport,
 		renderDocument,
+		roundGeometryDocument,
 		screenToWorld,
 		snapPointToExistingVertex,
 		trianglePointsFromBounds,
@@ -41,7 +45,15 @@
 		type Tool,
 		type Viewport
 	} from '@glyphsmith/editor';
-	import { applyPatch, findNode, findParentNode, groupNodes, moveNodeToParent, reorderChildren, ungroupNode } from '@glyphsmith/kernel';
+	import {
+		applyPatch,
+		findNode,
+		findParentNode,
+		groupNodes,
+		moveNodeToParent,
+		reorderChildren,
+		ungroupNode
+	} from '@glyphsmith/kernel';
 	import { exportToSvg, importFromSvg } from '@glyphsmith/svg';
 	import { DragDropProvider, type DragDropEventHandlers } from '@dnd-kit/svelte';
 	import { isSortable } from '@dnd-kit/svelte/sortable';
@@ -77,6 +89,7 @@
 	let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>(initialSaveStatusFromData());
 	let hostStatus = $state<'disabled' | 'connecting' | 'connected' | 'error'>('disabled');
 	let liveEditStartProject: GlyphSmithProject | undefined;
+	let liveEditDidChange = false;
 	let settingsEditStartProject: GlyphSmithProject | undefined;
 	let hostSocket: WebSocket | undefined;
 	let hostSyncTimer: ReturnType<typeof setTimeout> | undefined;
@@ -142,7 +155,9 @@
 		undo: '/icons/Undo.svg'
 	} as const;
 
-	const activePage = $derived(project.pages.find((page) => page.id === project.activePageId) ?? project.pages[0]!);
+	const activePage = $derived(
+		project.pages.find((page) => page.id === project.activePageId) ?? project.pages[0]!
+	);
 	const geometryDocument = $derived(activePage.document);
 	const layerItems = $derived(buildLayerItems(geometryDocument.root, expandedGroupIds));
 	const visibleLayerItems = $derived(
@@ -182,7 +197,11 @@
 		return 'idle';
 	}
 
-	function buildLayerItems(parent: Extract<GeometryNode, { type: 'group' }>, expandedIds: NodeId[], depth = 0): LayerItem[] {
+	function buildLayerItems(
+		parent: Extract<GeometryNode, { type: 'group' }>,
+		expandedIds: NodeId[],
+		depth = 0
+	): LayerItem[] {
 		const items: LayerItem[] = [];
 		const expanded = new Set(expandedIds);
 		const children = parent.children;
@@ -431,7 +450,8 @@
 	function handlePointerDown(event: PointerEvent) {
 		const screenPoint = pointerToScreen(event);
 		const rawWorldPoint = pointerToWorld(event);
-		const worldPoint = tool === 'select' || isShapeTool(tool) ? rawWorldPoint : snapWorldPoint(rawWorldPoint);
+		const worldPoint =
+			tool === 'select' || isShapeTool(tool) ? rawWorldPoint : snapWorldPoint(rawWorldPoint);
 
 		canvas.setPointerCapture(event.pointerId);
 
@@ -501,7 +521,10 @@
 	function handlePointerMove(event: PointerEvent) {
 		const screenPoint = pointerToScreen(event);
 		const rawWorldPoint = pointerToWorld(event);
-		const worldPoint = tool === 'path' || (draftStart && tool !== 'select') ? snapWorldPoint(rawWorldPoint) : rawWorldPoint;
+		const worldPoint =
+			tool === 'path' || (draftStart && tool !== 'select')
+				? snapWorldPoint(rawWorldPoint)
+				: rawWorldPoint;
 
 		if (panning && lastPanPoint) {
 			shapePreviewPoint = undefined;
@@ -522,6 +545,11 @@
 		if (tool === 'select' && dragging && lastDragPoint) {
 			const dx = worldPoint.x - lastDragPoint.x;
 			const dy = worldPoint.y - lastDragPoint.y;
+
+			if (dx === 0 && dy === 0) {
+				return;
+			}
+
 			let nextDocument = geometryDocument;
 
 			for (const nodeId of effectiveSelectedNodeIds()) {
@@ -534,6 +562,7 @@
 			}
 
 			updateActiveDocument(nextDocument);
+			liveEditDidChange = true;
 			lastDragPoint = worldPoint;
 			return;
 		}
@@ -541,8 +570,9 @@
 		if (tool === 'select' && editingHandle) {
 			const patch = createEditHandleUpdatePatch(geometryDocument, editingHandle, worldPoint);
 
-			if (patch) {
+			if (patch && updatePatchChangesNode(patch)) {
 				updateActiveDocument(applyPatch(geometryDocument, patch));
+				liveEditDidChange = true;
 			}
 
 			return;
@@ -569,7 +599,6 @@
 			finishLiveEdit();
 			return;
 		}
-
 	}
 
 	function handlePointerLeave() {
@@ -614,6 +643,29 @@
 			changes: {
 				[field]: value
 			}
+		});
+	}
+
+	function updateDocumentViewBox(field: keyof ViewBox, event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const value = Number(input.value);
+
+		if (!Number.isFinite(value)) {
+			return;
+		}
+
+		const viewBox = {
+			...getDocumentViewBox(geometryDocument),
+			[field]: value
+		};
+
+		if (viewBox.width <= 0 || viewBox.height <= 0) {
+			return;
+		}
+
+		commitPatch({
+			op: 'updateDocument',
+			changes: { viewBox }
 		});
 	}
 
@@ -794,7 +846,10 @@
 			return fallback;
 		}
 
-		return getComputedStyle(document.documentElement).getPropertyValue(`--color-gs-${name}`).trim() || fallback;
+		return (
+			getComputedStyle(document.documentElement).getPropertyValue(`--color-gs-${name}`).trim() ||
+			fallback
+		);
 	}
 
 	function normalizeColor(color: string) {
@@ -1144,9 +1199,11 @@
 	}
 
 	function clampPointToDocument(point: Point): Point {
+		const viewBox = getDocumentViewBox(geometryDocument);
+
 		return {
-			x: Math.min(Math.max(point.x, 0), geometryDocument.width),
-			y: Math.min(Math.max(point.y, 0), geometryDocument.height)
+			x: Math.min(Math.max(point.x, viewBox.x), viewBox.x + viewBox.width),
+			y: Math.min(Math.max(point.y, viewBox.y), viewBox.y + viewBox.height)
 		};
 	}
 
@@ -1172,8 +1229,9 @@
 	}
 
 	function defaultShapeSize(shapeTool: ShapeTool) {
-		const canvasWidth = Math.max(1, geometryDocument.width);
-		const canvasHeight = Math.max(1, geometryDocument.height);
+		const viewBox = getDocumentViewBox(geometryDocument);
+		const canvasWidth = Math.max(1, viewBox.width);
+		const canvasHeight = Math.max(1, viewBox.height);
 		const shortSide = Math.min(canvasWidth, canvasHeight);
 		const widthRatio = shapeTool === 'ellipse' ? 0.44 : shapeTool === 'triangle' ? 0.34 : 0.38;
 		const heightRatio = shapeTool === 'triangle' ? 0.3 : 0.25;
@@ -1185,13 +1243,15 @@
 	}
 
 	function defaultTextFontSize() {
-		const shortSide = Math.max(1, Math.min(geometryDocument.width, geometryDocument.height));
+		const viewBox = getDocumentViewBox(geometryDocument);
+		const shortSide = Math.max(1, Math.min(viewBox.width, viewBox.height));
 
-		return clampDimension(shortSide * 0.094, 1, Math.max(1, geometryDocument.height));
+		return clampDimension(shortSide * 0.094, 1, Math.max(1, viewBox.height));
 	}
 
 	function defaultStrokeWidth() {
-		const shortSide = Math.max(1, Math.min(geometryDocument.width, geometryDocument.height));
+		const viewBox = getDocumentViewBox(geometryDocument);
+		const shortSide = Math.max(1, Math.min(viewBox.width, viewBox.height));
 
 		return clampDimension(shortSide * 0.008, 0.5, 64);
 	}
@@ -1205,12 +1265,21 @@
 	}
 
 	function clampBoundsToDocument(bounds: { start: Point; end: Point }) {
+		const viewBox = getDocumentViewBox(geometryDocument);
 		const x = Math.min(bounds.start.x, bounds.end.x);
 		const y = Math.min(bounds.start.y, bounds.end.y);
 		const width = Math.abs(bounds.end.x - bounds.start.x);
 		const height = Math.abs(bounds.end.y - bounds.start.y);
-		const nextX = clampDimension(x, 0, Math.max(0, geometryDocument.width - width));
-		const nextY = clampDimension(y, 0, Math.max(0, geometryDocument.height - height));
+		const nextX = clampDimension(
+			x,
+			viewBox.x,
+			Math.max(viewBox.x, viewBox.x + viewBox.width - width)
+		);
+		const nextY = clampDimension(
+			y,
+			viewBox.y,
+			Math.max(viewBox.y, viewBox.y + viewBox.height - height)
+		);
 
 		return {
 			start: { x: nextX, y: nextY },
@@ -1222,12 +1291,7 @@
 		return Math.min(Math.max(value, min), max);
 	}
 
-	function createShapeInsertPatch(
-		shapeTool: ShapeTool,
-		id: NodeId,
-		start: Point,
-		end: Point
-	) {
+	function createShapeInsertPatch(shapeTool: ShapeTool, id: NodeId, start: Point, end: Point) {
 		const style = defaultStrokeStyle();
 
 		if (shapeTool === 'rect') {
@@ -1241,15 +1305,22 @@
 		return createTriangleInsertPatch({ id, start, end, style });
 	}
 
-
 	function commitPatch(patch: Parameters<typeof applyPatch>[1]) {
 		undoStack = [...undoStack, cloneProject(project)];
 		redoStack = [];
-		updateActiveDocument(applyPatch(geometryDocument, patch));
+		const nextDocument = applyPatch(geometryDocument, patch);
+		const roundedNodeIds = geometryPatchNodeIds(patch);
+
+		updateActiveDocument(
+			roundedNodeIds.length > 0
+				? roundGeometryDocument(nextDocument, roundedNodeIds, coordinateDecimalPlaces)
+				: nextDocument
+		);
 	}
 
 	function beginLiveEdit() {
 		liveEditStartProject = cloneProject(project);
+		liveEditDidChange = false;
 		redoStack = [];
 	}
 
@@ -1258,8 +1329,70 @@
 			return;
 		}
 
+		const roundedNodeIds = effectiveSelectedNodeIds();
+
+		if (liveEditDidChange && roundedNodeIds.length > 0) {
+			updateActiveDocument(
+				roundGeometryDocument(geometryDocument, roundedNodeIds, coordinateDecimalPlaces)
+			);
+		}
+
 		undoStack = [...undoStack, liveEditStartProject];
 		liveEditStartProject = undefined;
+		liveEditDidChange = false;
+	}
+
+	function geometryPatchNodeIds(patch: Parameters<typeof applyPatch>[1]): NodeId[] {
+		switch (patch.op) {
+			case 'insert':
+				return [patch.node.id];
+			case 'move':
+				return [patch.target];
+			case 'update':
+				return hasGeometryChanges(patch.changes) ? [patch.target] : [];
+			case 'delete':
+			case 'updateDocument':
+				return [];
+		}
+	}
+
+	function hasGeometryChanges(changes: Partial<GeometryNode>): boolean {
+		return Object.keys(changes).some((field) =>
+			[
+				'cx',
+				'cy',
+				'height',
+				'points',
+				'r',
+				'runs',
+				'rx',
+				'ry',
+				'segments',
+				'spline',
+				'start',
+				'width',
+				'x',
+				'x1',
+				'x2',
+				'y',
+				'y1',
+				'y2'
+			].includes(field)
+		);
+	}
+
+	function updatePatchChangesNode(patch: Extract<Parameters<typeof applyPatch>[1], { op: 'update' }>) {
+		const node = findNode(geometryDocument, patch.target);
+
+		if (!node) {
+			return false;
+		}
+
+		const currentValues = node as unknown as Record<string, unknown>;
+
+		return Object.entries(patch.changes).some(
+			([field, value]) => currentValues[field] !== value
+		);
 	}
 
 	function undo() {
@@ -1468,8 +1601,7 @@
 		const pages = project.pages.filter((page) => page.id !== pageId);
 		const fallbackPage = pages[Math.max(0, pageIndex - 1)] ?? pages[0];
 		const deletingActivePage = pageId === project.activePageId;
-		const nextActivePageId =
-			deletingActivePage ? fallbackPage?.id : project.activePageId;
+		const nextActivePageId = deletingActivePage ? fallbackPage?.id : project.activePageId;
 
 		if (!nextActivePageId) {
 			return;
@@ -1541,7 +1673,10 @@
 
 		toolTooltip = {
 			text,
-			x: Math.max(gutter, Math.min(rect.right + tooltipOffset, window.innerWidth - gutter - maxTooltipWidth)),
+			x: Math.max(
+				gutter,
+				Math.min(rect.right + tooltipOffset, window.innerWidth - gutter - maxTooltipWidth)
+			),
 			y: rect.top + rect.height / 2
 		};
 	}
@@ -1699,17 +1834,35 @@
 			return;
 		}
 
-		updateActiveDocument(reorderChildren(geometryDocument, sourceItem.parentId, sourceItem.astIndex, targetItem.astIndex));
+		updateActiveDocument(
+			reorderChildren(
+				geometryDocument,
+				sourceItem.parentId,
+				sourceItem.astIndex,
+				targetItem.astIndex
+			)
+		);
 	}
 
 	function moveLayerIntoGroup(sourceItem: LayerItem, targetParentId: NodeId) {
 		const targetParent = findNode(geometryDocument, targetParentId);
 
-		if (!targetParent || targetParent.type !== 'group' || !canMoveLayerToParent(sourceItem.node.id, targetParentId)) {
+		if (
+			!targetParent ||
+			targetParent.type !== 'group' ||
+			!canMoveLayerToParent(sourceItem.node.id, targetParentId)
+		) {
 			return;
 		}
 
-		updateActiveDocument(moveNodeToParent(geometryDocument, sourceItem.node.id, targetParentId, targetParent.children.length));
+		updateActiveDocument(
+			moveNodeToParent(
+				geometryDocument,
+				sourceItem.node.id,
+				targetParentId,
+				targetParent.children.length
+			)
+		);
 		expandedGroupIds = [...new Set([...expandedGroupIds, targetParentId])];
 	}
 
@@ -1718,11 +1871,17 @@
 			return;
 		}
 
-		updateActiveDocument(moveNodeToParent(geometryDocument, sourceItem.node.id, targetParentId, targetIndex));
+		updateActiveDocument(
+			moveNodeToParent(geometryDocument, sourceItem.node.id, targetParentId, targetIndex)
+		);
 	}
 
 	function canMoveLayerToParent(nodeId: NodeId, targetParentId: NodeId) {
-		return nodeId !== geometryDocument.root.id && nodeId !== targetParentId && !isAncestorOf(nodeId, targetParentId);
+		return (
+			nodeId !== geometryDocument.root.id &&
+			nodeId !== targetParentId &&
+			!isAncestorOf(nodeId, targetParentId)
+		);
 	}
 
 	function selectNode(nodeId: NodeId, additive = false) {
@@ -1771,8 +1930,11 @@
 	}
 
 	function effectiveSelectedNodeIds() {
-		return selectedNodeIds.filter((nodeId) =>
-			!selectedNodeIds.some((candidateId) => candidateId !== nodeId && isAncestorOf(candidateId, nodeId))
+		return selectedNodeIds.filter(
+			(nodeId) =>
+				!selectedNodeIds.some(
+					(candidateId) => candidateId !== nodeId && isAncestorOf(candidateId, nodeId)
+				)
 		);
 	}
 
@@ -1894,7 +2056,9 @@
 
 		undoStack = [...undoStack, cloneProject(project)];
 		redoStack = [];
-		updateActiveDocument(moveNodeToParent(geometryDocument, nodeId, grandParent.id, parentIndex + 1));
+		updateActiveDocument(
+			moveNodeToParent(geometryDocument, nodeId, grandParent.id, parentIndex + 1)
+		);
 		selectedNodeIds = [nodeId];
 	}
 
@@ -1916,10 +2080,12 @@
 		const trimmedValue = rawValue.trim();
 		const value =
 			field === 'strokeMiterlimit' || field === 'strokeDashoffset'
-				? trimmedValue === '' ? undefined : Number(trimmedValue)
+				? trimmedValue === ''
+					? undefined
+					: Number(trimmedValue)
 				: field === 'strokeWidth' || field === 'opacity'
-				? Number(rawValue)
-				: trimmedValue || undefined;
+					? Number(rawValue)
+					: trimmedValue || undefined;
 
 		if (typeof value === 'number' && !Number.isFinite(value)) {
 			return;
@@ -1937,14 +2103,31 @@
 		});
 	}
 
-	type GeometryNumberField = 'cx' | 'cy' | 'height' | 'r' | 'rx' | 'ry' | 'width' | 'x' | 'x1' | 'x2' | 'y' | 'y1' | 'y2';
+	type GeometryNumberField =
+		| 'cx'
+		| 'cy'
+		| 'height'
+		| 'r'
+		| 'rx'
+		| 'ry'
+		| 'width'
+		| 'x'
+		| 'x1'
+		| 'x2'
+		| 'y'
+		| 'y1'
+		| 'y2';
 
 	function updateSelectedGeometryNumber(field: GeometryNumberField, rawValue: string) {
 		if (!selectedNode) {
 			return;
 		}
 
-		if (selectedNode.type === 'rect' && (field === 'rx' || field === 'ry') && rawValue.trim() === '') {
+		if (
+			selectedNode.type === 'rect' &&
+			(field === 'rx' || field === 'ry') &&
+			rawValue.trim() === ''
+		) {
 			commitPatch({
 				op: 'update',
 				target: selectedNode.id,
@@ -2058,7 +2241,10 @@
 		});
 	}
 
-	function updateSelectedTextField(field: 'dominantBaseline' | 'fontFamily' | 'fontStyle' | 'fontWeight' | 'textAnchor', rawValue: string) {
+	function updateSelectedTextField(
+		field: 'dominantBaseline' | 'fontFamily' | 'fontStyle' | 'fontWeight' | 'textAnchor',
+		rawValue: string
+	) {
 		if (!selectedNode || selectedNode.type !== 'text') {
 			return;
 		}
@@ -2106,7 +2292,11 @@
 
 		if (pages.length === 1) {
 			const page = pages[0]!;
-			downloadTextFile(exportToSvg(page.document), `${fileSafeName(page.name || page.id)}.svg`, 'image/svg+xml');
+			downloadTextFile(
+				exportToSvg(page.document),
+				`${fileSafeName(page.name || page.id)}.svg`,
+				'image/svg+xml'
+			);
 			svgExportOpen = false;
 			return;
 		}
@@ -2116,14 +2306,14 @@
 		const entries: Record<string, Uint8Array> = {};
 
 		pages.forEach((page) => {
-			const basename = uniqueExportFilename(
-				fileSafeName(page.name || page.id),
-				usedNames
-			);
+			const basename = uniqueExportFilename(fileSafeName(page.name || page.id), usedNames);
 			entries[`${projectSlug}/${basename}.svg`] = strToU8(exportToSvg(page.document));
 		});
 
-		downloadBlob(new Blob([zipSync(entries)], { type: 'application/zip' }), `${projectSlug}-svg.zip`);
+		downloadBlob(
+			new Blob([zipSync(entries)], { type: 'application/zip' }),
+			`${projectSlug}-svg.zip`
+		);
 		svgExportOpen = false;
 	}
 
@@ -2151,7 +2341,12 @@
 	}
 
 	function fileSafeName(value: string) {
-		return value.trim().replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '') || 'glyphsmith';
+		return (
+			value
+				.trim()
+				.replace(/[^a-z0-9-_]+/gi, '-')
+				.replace(/^-+|-+$/g, '') || 'glyphsmith'
+		);
 	}
 
 	function uniqueExportFilename(basename: string, usedNames: Map<string, number>) {
@@ -2277,21 +2472,23 @@
 	): message is { type: 'project:ack' } | { type: 'project:snapshot'; project: GlyphSmithProject } {
 		return Boolean(
 			message &&
-				typeof message === 'object' &&
-				'type' in message &&
-				((message.type === 'project:ack') ||
-					(message.type === 'project:snapshot' && 'project' in message && isProjectLike(message.project)))
+			typeof message === 'object' &&
+			'type' in message &&
+			(message.type === 'project:ack' ||
+				(message.type === 'project:snapshot' &&
+					'project' in message &&
+					isProjectLike(message.project)))
 		);
 	}
 
 	function isProjectLike(value: unknown): value is GlyphSmithProject {
 		return Boolean(
 			value &&
-				typeof value === 'object' &&
-				'schemaVersion' in value &&
-				value.schemaVersion === 1 &&
-				'pages' in value &&
-				Array.isArray(value.pages)
+			typeof value === 'object' &&
+			'schemaVersion' in value &&
+			value.schemaVersion === 1 &&
+			'pages' in value &&
+			Array.isArray(value.pages)
 		);
 	}
 
@@ -2406,7 +2603,7 @@
 							document
 						}
 					: page
-				)
+			)
 		};
 		markProjectChanged();
 	}
@@ -2432,7 +2629,13 @@
 	}
 
 	function drawCatmullRomCandidate(canvasContext: CanvasRenderingContext2D) {
-		if (tool !== 'path' || pathSegmentMode !== 'catmullRom' || !activePathNodeId || !draftStart || !draftEnd) {
+		if (
+			tool !== 'path' ||
+			pathSegmentMode !== 'catmullRom' ||
+			!activePathNodeId ||
+			!draftStart ||
+			!draftEnd
+		) {
 			return;
 		}
 
@@ -2533,7 +2736,10 @@
 		}
 
 		const start = getPathEndPoint(node);
-		const previous = node.segments.length < 2 ? node.start : node.segments[node.segments.length - 2]?.to ?? node.start;
+		const previous =
+			node.segments.length < 2
+				? node.start
+				: (node.segments[node.segments.length - 2]?.to ?? node.start);
 		const segment = createCubicBezierSegment(previous, start, draftEnd);
 
 		canvasContext.save();
@@ -2592,7 +2798,15 @@
 
 		if (shapeTool === 'ellipse') {
 			canvasContext.beginPath();
-			canvasContext.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+			canvasContext.ellipse(
+				x + width / 2,
+				y + height / 2,
+				width / 2,
+				height / 2,
+				0,
+				0,
+				Math.PI * 2
+			);
 			canvasContext.fill();
 			canvasContext.stroke();
 			return;
@@ -2817,7 +3031,11 @@
 		return getPathEndTangent(node);
 	}
 
-	function arcCandidateCircle(start: Point, segment: Extract<Segment, { type: 'arc' }>, tangent: Point) {
+	function arcCandidateCircle(
+		start: Point,
+		segment: Extract<Segment, { type: 'arc' }>,
+		tangent: Point
+	) {
 		const length = Math.hypot(tangent.x, tangent.y);
 
 		if (length < 0.001) {
@@ -2844,7 +3062,11 @@
 		};
 	}
 
-	function drawPathGeometry(canvasContext: CanvasRenderingContext2D, start: Point, segments: Segment[]) {
+	function drawPathGeometry(
+		canvasContext: CanvasRenderingContext2D,
+		start: Point,
+		segments: Segment[]
+	) {
 		canvasContext.beginPath();
 		canvasContext.moveTo(start.x, start.y);
 
@@ -2854,7 +3076,12 @@
 			if (segment.type === 'line') {
 				canvasContext.lineTo(segment.to.x, segment.to.y);
 			} else if (segment.type === 'quadratic') {
-				canvasContext.quadraticCurveTo(segment.control.x, segment.control.y, segment.to.x, segment.to.y);
+				canvasContext.quadraticCurveTo(
+					segment.control.x,
+					segment.control.y,
+					segment.to.x,
+					segment.to.y
+				);
 			} else if (segment.type === 'cubic') {
 				canvasContext.bezierCurveTo(
 					segment.control1.x,
@@ -2886,10 +3113,22 @@
 		</div>
 
 		<div class="history-controls" aria-label="History">
-			<button aria-label="Undo" title="Undo" type="button" onclick={undo} disabled={undoStack.length === 0}>
+			<button
+				aria-label="Undo"
+				title="Undo"
+				type="button"
+				onclick={undo}
+				disabled={undoStack.length === 0}
+			>
 				<img alt="" aria-hidden="true" src={iconPaths.undo} />
 			</button>
-			<button aria-label="Redo" title="Redo" type="button" onclick={redo} disabled={redoStack.length === 0}>
+			<button
+				aria-label="Redo"
+				title="Redo"
+				type="button"
+				onclick={redo}
+				disabled={redoStack.length === 0}
+			>
 				<img alt="" aria-hidden="true" src={iconPaths.redo} />
 			</button>
 		</div>
@@ -2928,29 +3167,43 @@
 					type="file"
 					onchange={importSvgFile}
 				/>
-				<button type="button" aria-expanded={svgImportOpen} onclick={() => (svgImportOpen = !svgImportOpen)}>
+				<button
+					type="button"
+					aria-expanded={svgImportOpen}
+					onclick={() => (svgImportOpen = !svgImportOpen)}
+				>
 					Import SVG
 				</button>
 				{#if svgImportOpen}
 					<div class="export-popover import-popover">
 						<div class="export-popover-header">
 							<h2>Import SVG</h2>
-							<button type="button" aria-label="Close import menu" onclick={() => (svgImportOpen = false)}>x</button>
+							<button
+								type="button"
+								aria-label="Close import menu"
+								onclick={() => (svgImportOpen = false)}>x</button
+							>
 						</div>
-						<button class="import-file-button" type="button" onclick={() => svgImportInput?.click()}>
+						<button
+							class="import-file-button"
+							type="button"
+							onclick={() => svgImportInput?.click()}
+						>
 							Choose SVG File
 						</button>
 						<label class="import-text-field" for="svg-import-text">
 							<span>Paste SVG</span>
-							<textarea
-								id="svg-import-text"
-								placeholder="<svg ...>"
-								bind:value={svgImportText}
+							<textarea id="svg-import-text" placeholder="<svg ...>" bind:value={svgImportText}
 							></textarea>
 						</label>
 						<div class="export-popover-footer">
 							<span>{svgImportText.trim() ? 'Ready to import' : 'Paste SVG text'}</span>
-							<button class="primary" type="button" disabled={!svgImportText.trim()} onclick={importSvgText}>
+							<button
+								class="primary"
+								type="button"
+								disabled={!svgImportText.trim()}
+								onclick={importSvgText}
+							>
 								Import
 							</button>
 						</div>
@@ -2958,7 +3211,11 @@
 				{/if}
 			</div>
 			<div class="export-menu">
-				<button type="button" aria-expanded={svgExportOpen} onclick={() => (svgExportOpen = !svgExportOpen)}>
+				<button
+					type="button"
+					aria-expanded={svgExportOpen}
+					onclick={() => (svgExportOpen = !svgExportOpen)}
+				>
 					Export SVG
 				</button>
 				{#if svgExportOpen}
@@ -3005,35 +3262,125 @@
 		<div class="editor-stage">
 			<section class="canvas-shell">
 				<div class="toolbar" aria-label="Tools">
-					<button aria-label="Select" class:active={tool === 'select'} type="button" onclick={() => setTool('select')} onmouseenter={(event) => showToolTooltip(event, 'Select')} onfocus={(event) => showToolTooltip(event, 'Select')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Select"
+						class:active={tool === 'select'}
+						type="button"
+						onclick={() => setTool('select')}
+						onmouseenter={(event) => showToolTooltip(event, 'Select')}
+						onfocus={(event) => showToolTooltip(event, 'Select')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.select} />
 					</button>
-					<button aria-label="Rectangle" class:active={tool === 'rect'} type="button" onclick={() => setTool('rect')} onmouseenter={(event) => showToolTooltip(event, 'Rectangle')} onfocus={(event) => showToolTooltip(event, 'Rectangle')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Rectangle"
+						class:active={tool === 'rect'}
+						type="button"
+						onclick={() => setTool('rect')}
+						onmouseenter={(event) => showToolTooltip(event, 'Rectangle')}
+						onfocus={(event) => showToolTooltip(event, 'Rectangle')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.rect} />
 					</button>
-					<button aria-label="Ellipse" class:active={tool === 'ellipse'} type="button" onclick={() => setTool('ellipse')} onmouseenter={(event) => showToolTooltip(event, 'Ellipse')} onfocus={(event) => showToolTooltip(event, 'Ellipse')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Ellipse"
+						class:active={tool === 'ellipse'}
+						type="button"
+						onclick={() => setTool('ellipse')}
+						onmouseenter={(event) => showToolTooltip(event, 'Ellipse')}
+						onfocus={(event) => showToolTooltip(event, 'Ellipse')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.ellipse} />
 					</button>
-					<button aria-label="Triangle" class:active={tool === 'triangle'} type="button" onclick={() => setTool('triangle')} onmouseenter={(event) => showToolTooltip(event, 'Triangle')} onfocus={(event) => showToolTooltip(event, 'Triangle')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Triangle"
+						class:active={tool === 'triangle'}
+						type="button"
+						onclick={() => setTool('triangle')}
+						onmouseenter={(event) => showToolTooltip(event, 'Triangle')}
+						onfocus={(event) => showToolTooltip(event, 'Triangle')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.triangle} />
 					</button>
-					<button aria-label="Text" class:active={tool === 'text'} type="button" onclick={() => setTool('text')} onmouseenter={(event) => showToolTooltip(event, 'Text')} onfocus={(event) => showToolTooltip(event, 'Text')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Text"
+						class:active={tool === 'text'}
+						type="button"
+						onclick={() => setTool('text')}
+						onmouseenter={(event) => showToolTooltip(event, 'Text')}
+						onfocus={(event) => showToolTooltip(event, 'Text')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.text} />
 					</button>
 					<div class="toolbar-separator" aria-hidden="true"></div>
-					<button aria-label="Line" class:active={tool === 'path' && pathSegmentMode === 'line'} type="button" onclick={() => setLineTool('line')} onmouseenter={(event) => showToolTooltip(event, 'Line')} onfocus={(event) => showToolTooltip(event, 'Line')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Line"
+						class:active={tool === 'path' && pathSegmentMode === 'line'}
+						type="button"
+						onclick={() => setLineTool('line')}
+						onmouseenter={(event) => showToolTooltip(event, 'Line')}
+						onfocus={(event) => showToolTooltip(event, 'Line')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.line} />
 					</button>
-					<button aria-label="Arc" class:active={tool === 'path' && pathSegmentMode === 'arc'} type="button" onclick={() => setLineTool('arc')} onmouseenter={(event) => showToolTooltip(event, 'Arc')} onfocus={(event) => showToolTooltip(event, 'Arc')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Arc"
+						class:active={tool === 'path' && pathSegmentMode === 'arc'}
+						type="button"
+						onclick={() => setLineTool('arc')}
+						onmouseenter={(event) => showToolTooltip(event, 'Arc')}
+						onfocus={(event) => showToolTooltip(event, 'Arc')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.arc} />
 					</button>
-					<button aria-label="Cubic Bezier" class:active={tool === 'path' && pathSegmentMode === 'cubic'} type="button" onclick={() => setLineTool('cubic')} onmouseenter={(event) => showToolTooltip(event, 'Cubic Bezier')} onfocus={(event) => showToolTooltip(event, 'Cubic Bezier')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Cubic Bezier"
+						class:active={tool === 'path' && pathSegmentMode === 'cubic'}
+						type="button"
+						onclick={() => setLineTool('cubic')}
+						onmouseenter={(event) => showToolTooltip(event, 'Cubic Bezier')}
+						onfocus={(event) => showToolTooltip(event, 'Cubic Bezier')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.cubic} />
 					</button>
-					<button aria-label="Catmull" class:active={tool === 'path' && pathSegmentMode === 'catmullRom'} type="button" onclick={() => setLineTool('catmullRom')} onmouseenter={(event) => showToolTooltip(event, 'Catmull')} onfocus={(event) => showToolTooltip(event, 'Catmull')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Catmull"
+						class:active={tool === 'path' && pathSegmentMode === 'catmullRom'}
+						type="button"
+						onclick={() => setLineTool('catmullRom')}
+						onmouseenter={(event) => showToolTooltip(event, 'Catmull')}
+						onfocus={(event) => showToolTooltip(event, 'Catmull')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.catmullRom} />
 					</button>
-					<button aria-label="Basis" class:active={tool === 'path' && pathSegmentMode === 'basis'} type="button" onclick={() => setLineTool('basis')} onmouseenter={(event) => showToolTooltip(event, 'Basis')} onfocus={(event) => showToolTooltip(event, 'Basis')} onmouseleave={closeToolTooltip} onblur={closeToolTooltip}>
+					<button
+						aria-label="Basis"
+						class:active={tool === 'path' && pathSegmentMode === 'basis'}
+						type="button"
+						onclick={() => setLineTool('basis')}
+						onmouseenter={(event) => showToolTooltip(event, 'Basis')}
+						onfocus={(event) => showToolTooltip(event, 'Basis')}
+						onmouseleave={closeToolTooltip}
+						onblur={closeToolTooltip}
+					>
 						<img alt="" aria-hidden="true" src={iconPaths.basis} />
 					</button>
 				</div>
@@ -3070,7 +3417,13 @@
 							<span class="page-name">{pageName}</span>
 						</button>
 					{/each}
-					<button class="page-add-button" type="button" aria-label="New page" title="New page" onclick={addPage}>
+					<button
+						class="page-add-button"
+						type="button"
+						aria-label="New page"
+						title="New page"
+						onclick={addPage}
+					>
 						<span>+</span>
 					</button>
 				</div>
@@ -3113,18 +3466,29 @@
 								class="page-context-name-input"
 								type="text"
 								value={renamingPageName}
-								oninput={(event) => (renamingPageName = (event.currentTarget as HTMLInputElement).value)}
+								oninput={(event) =>
+									(renamingPageName = (event.currentTarget as HTMLInputElement).value)}
 								onblur={confirmPageContextRename}
 								onkeydown={handlePageRenameKeyDown}
 							/>
 						{:else}
-							<button class="page-context-name-button" type="button" onclick={startPageContextRename}>
+							<button
+								class="page-context-name-button"
+								type="button"
+								onclick={startPageContextRename}
+							>
 								{pageContextMenuPage.name}
 							</button>
 						{/if}
-						<span>{pageContextMenuPage.document.width} x {pageContextMenuPage.document.height}px</span>
+						<span
+							>{pageContextMenuPage.document.width} x {pageContextMenuPage.document.height}px</span
+						>
 					</div>
-					<button type="button" role="menuitem" onclick={() => duplicatePage(pageContextMenuPage.id)}>
+					<button
+						type="button"
+						role="menuitem"
+						onclick={() => duplicatePage(pageContextMenuPage.id)}
+					>
 						Duplicate
 					</button>
 					<button
@@ -3224,9 +3588,26 @@
 			<details class="inspector-section" open>
 				<summary>
 					<span>Page Settings</span>
-					<svg aria-hidden="true" class="section-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-						<path class="section-chevron-closed" stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-						<path class="section-chevron-open" stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+					<svg
+						aria-hidden="true"
+						class="section-chevron"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
+						<path
+							class="section-chevron-closed"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"
+						/>
+						<path
+							class="section-chevron-open"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m19.5 8.25-7.5 7.5-7.5-7.5"
+						/>
 					</svg>
 				</summary>
 				<div class="field-grid">
@@ -3239,7 +3620,7 @@
 						onchange={updateActivePageName}
 					/>
 
-					<label for="document-width">Width</label>
+					<label for="document-width">Output Width</label>
 					<div class="number-field">
 						<input
 							id="document-width"
@@ -3252,7 +3633,7 @@
 						<span>px</span>
 					</div>
 
-					<label for="document-height">Height</label>
+					<label for="document-height">Output Height</label>
 					<div class="number-field">
 						<input
 							id="document-height"
@@ -3264,15 +3645,78 @@
 						/>
 						<span>px</span>
 					</div>
+
+					<label for="document-viewbox-x">ViewBox X</label>
+					<div class="number-field">
+						<input
+							id="document-viewbox-x"
+							step="any"
+							type="number"
+							value={getDocumentViewBox(geometryDocument).x}
+							onchange={(event) => updateDocumentViewBox('x', event)}
+						/>
+					</div>
+
+					<label for="document-viewbox-y">ViewBox Y</label>
+					<div class="number-field">
+						<input
+							id="document-viewbox-y"
+							step="any"
+							type="number"
+							value={getDocumentViewBox(geometryDocument).y}
+							onchange={(event) => updateDocumentViewBox('y', event)}
+						/>
+					</div>
+
+					<label for="document-viewbox-width">ViewBox Width</label>
+					<div class="number-field">
+						<input
+							id="document-viewbox-width"
+							min="0.0001"
+							step="any"
+							type="number"
+							value={getDocumentViewBox(geometryDocument).width}
+							onchange={(event) => updateDocumentViewBox('width', event)}
+						/>
+					</div>
+
+					<label for="document-viewbox-height">ViewBox Height</label>
+					<div class="number-field">
+						<input
+							id="document-viewbox-height"
+							min="0.0001"
+							step="any"
+							type="number"
+							value={getDocumentViewBox(geometryDocument).height}
+							onchange={(event) => updateDocumentViewBox('height', event)}
+						/>
+					</div>
 				</div>
 			</details>
 
 			<details class="inspector-section" open>
 				<summary>
 					<span>Text</span>
-					<svg aria-hidden="true" class="section-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-						<path class="section-chevron-closed" stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-						<path class="section-chevron-open" stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+					<svg
+						aria-hidden="true"
+						class="section-chevron"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
+						<path
+							class="section-chevron-closed"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"
+						/>
+						<path
+							class="section-chevron-open"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m19.5 8.25-7.5 7.5-7.5-7.5"
+						/>
 					</svg>
 				</summary>
 				{#if selectedNode && selectedNodeIds.length === 1 && selectedNode.type === 'text'}
@@ -3339,16 +3783,39 @@
 						</div>
 					</div>
 				{:else}
-					<div class="empty-row">{selectedNodeIds.length === 1 ? 'N/A' : selectedNodeIds.length > 1 ? `${selectedNodeIds.length} selected` : 'No selection'}</div>
+					<div class="empty-row">
+						{selectedNodeIds.length === 1
+							? 'N/A'
+							: selectedNodeIds.length > 1
+								? `${selectedNodeIds.length} selected`
+								: 'No selection'}
+					</div>
 				{/if}
 			</details>
 
 			<details class="inspector-section" open>
 				<summary>
 					<span>Page Background</span>
-					<svg aria-hidden="true" class="section-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-						<path class="section-chevron-closed" stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-						<path class="section-chevron-open" stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+					<svg
+						aria-hidden="true"
+						class="section-chevron"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
+						<path
+							class="section-chevron-closed"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"
+						/>
+						<path
+							class="section-chevron-open"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m19.5 8.25-7.5 7.5-7.5-7.5"
+						/>
 					</svg>
 				</summary>
 				<div class="background-options" aria-label="Page background">
@@ -3367,9 +3834,26 @@
 			<details class="inspector-section" open>
 				<summary>
 					<span>Zoom Settings</span>
-					<svg aria-hidden="true" class="section-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-						<path class="section-chevron-closed" stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-						<path class="section-chevron-open" stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+					<svg
+						aria-hidden="true"
+						class="section-chevron"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
+						<path
+							class="section-chevron-closed"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"
+						/>
+						<path
+							class="section-chevron-open"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m19.5 8.25-7.5 7.5-7.5-7.5"
+						/>
 					</svg>
 				</summary>
 				<div class="field-grid compact">
@@ -3387,10 +3871,17 @@
 							/>
 							<span>%</span>
 						</div>
-						<button class="secondary-button fit-button" type="button" title="Actual Size" onclick={setActualSizeZoom}>
+						<button
+							class="secondary-button fit-button"
+							type="button"
+							title="Actual Size"
+							onclick={setActualSizeZoom}
+						>
 							100%
 						</button>
-						<button class="secondary-button fit-button" type="button" onclick={fitCanvasToDocument}>Fit</button>
+						<button class="secondary-button fit-button" type="button" onclick={fitCanvasToDocument}
+							>Fit</button
+						>
 					</div>
 				</div>
 			</details>
@@ -3398,9 +3889,26 @@
 			<details class="inspector-section" open>
 				<summary>
 					<span>Geometry</span>
-					<svg aria-hidden="true" class="section-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-						<path class="section-chevron-closed" stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-						<path class="section-chevron-open" stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+					<svg
+						aria-hidden="true"
+						class="section-chevron"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
+						<path
+							class="section-chevron-closed"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"
+						/>
+						<path
+							class="section-chevron-open"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m19.5 8.25-7.5 7.5-7.5-7.5"
+						/>
 					</svg>
 				</summary>
 				{#if selectedNode && selectedNodeIds.length === 1}
@@ -3434,7 +3942,8 @@
 								step="1"
 								type="number"
 								value={selectedNode.width}
-								oninput={(event) => updateSelectedGeometryNumber('width', event.currentTarget.value)}
+								oninput={(event) =>
+									updateSelectedGeometryNumber('width', event.currentTarget.value)}
 							/>
 
 							<label for="rect-height">Height</label>
@@ -3445,7 +3954,8 @@
 								step="1"
 								type="number"
 								value={selectedNode.height}
-								oninput={(event) => updateSelectedGeometryNumber('height', event.currentTarget.value)}
+								oninput={(event) =>
+									updateSelectedGeometryNumber('height', event.currentTarget.value)}
 							/>
 
 							<label for="rect-rx">Corner X</label>
@@ -3611,16 +4121,35 @@
 						{/if}
 					</div>
 				{:else}
-					<div class="empty-row">{selectedNodeIds.length > 1 ? `${selectedNodeIds.length} selected` : 'No selection'}</div>
+					<div class="empty-row">
+						{selectedNodeIds.length > 1 ? `${selectedNodeIds.length} selected` : 'No selection'}
+					</div>
 				{/if}
 			</details>
 
 			<details class="inspector-section" open>
 				<summary>
 					<span>Appearance</span>
-					<svg aria-hidden="true" class="section-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-						<path class="section-chevron-closed" stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-						<path class="section-chevron-open" stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+					<svg
+						aria-hidden="true"
+						class="section-chevron"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
+						<path
+							class="section-chevron-closed"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"
+						/>
+						<path
+							class="section-chevron-open"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m19.5 8.25-7.5 7.5-7.5-7.5"
+						/>
 					</svg>
 				</summary>
 				{#if selectedNode && selectedNodeIds.length === 1 && selectedNode.type !== 'group'}
@@ -3631,16 +4160,26 @@
 								aria-label="Fill color"
 								class="color-field"
 								type="color"
-								value={colorPickerValue(selectedNode.style?.fill ?? (selectedNode.type === 'text' ? selectedNode.fill : undefined), uiColors.primary)}
+								value={colorPickerValue(
+									selectedNode.style?.fill ??
+										(selectedNode.type === 'text' ? selectedNode.fill : undefined),
+									uiColors.primary
+								)}
 								oninput={(event) => updateSelectedStyle('fill', event.currentTarget.value)}
 							/>
 							<input
 								id="fill"
 								class="text-field"
-								value={selectedNode.style?.fill ?? (selectedNode.type === 'text' ? selectedNode.fill : undefined) ?? 'none'}
+								value={selectedNode.style?.fill ??
+									(selectedNode.type === 'text' ? selectedNode.fill : undefined) ??
+									'none'}
 								oninput={(event) => updateSelectedStyle('fill', event.currentTarget.value)}
 							/>
-							<button class="inline-button" type="button" onclick={() => updateSelectedStyle('fill', 'none')}>None</button>
+							<button
+								class="inline-button"
+								type="button"
+								onclick={() => updateSelectedStyle('fill', 'none')}>None</button
+							>
 						</div>
 
 						<label for="stroke">Stroke</label>
@@ -3649,13 +4188,19 @@
 								aria-label="Stroke color"
 								class="color-field"
 								type="color"
-								value={colorPickerValue(selectedNode.style?.stroke ?? (selectedNode.type === 'text' ? selectedNode.stroke : undefined), '#111827')}
+								value={colorPickerValue(
+									selectedNode.style?.stroke ??
+										(selectedNode.type === 'text' ? selectedNode.stroke : undefined),
+									'#111827'
+								)}
 								oninput={(event) => updateSelectedStyle('stroke', event.currentTarget.value)}
 							/>
 							<input
 								id="stroke"
 								class="text-field"
-								value={selectedNode.style?.stroke ?? (selectedNode.type === 'text' ? selectedNode.stroke : undefined) ?? '#111827'}
+								value={selectedNode.style?.stroke ??
+									(selectedNode.type === 'text' ? selectedNode.stroke : undefined) ??
+									'#111827'}
 								oninput={(event) => updateSelectedStyle('stroke', event.currentTarget.value)}
 							/>
 						</div>
@@ -3667,7 +4212,9 @@
 							min="0"
 							step="0.5"
 							type="number"
-							value={selectedNode.style?.strokeWidth ?? (selectedNode.type === 'text' ? selectedNode.strokeWidth : undefined) ?? 2}
+							value={selectedNode.style?.strokeWidth ??
+								(selectedNode.type === 'text' ? selectedNode.strokeWidth : undefined) ??
+								2}
 							oninput={(event) => updateSelectedStyle('strokeWidth', event.currentTarget.value)}
 						/>
 
@@ -3706,7 +4253,8 @@
 								step="0.5"
 								type="number"
 								value={selectedNode.style?.strokeMiterlimit ?? 4}
-								oninput={(event) => updateSelectedStyle('strokeMiterlimit', event.currentTarget.value)}
+								oninput={(event) =>
+									updateSelectedStyle('strokeMiterlimit', event.currentTarget.value)}
 							/>
 						{/if}
 
@@ -3726,7 +4274,8 @@
 							step="1"
 							type="number"
 							value={selectedNode.style?.strokeDashoffset ?? 0}
-							oninput={(event) => updateSelectedStyle('strokeDashoffset', event.currentTarget.value)}
+							oninput={(event) =>
+								updateSelectedStyle('strokeDashoffset', event.currentTarget.value)}
 						/>
 
 						<label for="opacity">Opacity</label>
@@ -3737,11 +4286,15 @@
 							max="1"
 							step="0.05"
 							type="number"
-							value={selectedNode.style?.opacity ?? (selectedNode.type === 'text' ? selectedNode.opacity : undefined) ?? 1}
+							value={selectedNode.style?.opacity ??
+								(selectedNode.type === 'text' ? selectedNode.opacity : undefined) ??
+								1}
 							oninput={(event) => updateSelectedStyle('opacity', event.currentTarget.value)}
 						/>
 					</div>
-					<button class="secondary-button danger" type="button" onclick={deleteSelection}>Delete Selection</button>
+					<button class="secondary-button danger" type="button" onclick={deleteSelection}
+						>Delete Selection</button
+					>
 				{:else}
 					<div class="empty-row">
 						{#if selectedNodeIds.length > 1}
@@ -3754,7 +4307,6 @@
 					</div>
 				{/if}
 			</details>
-
 		</aside>
 	</main>
 
@@ -3771,7 +4323,9 @@
 			>
 				<header class="modal-header">
 					<h2 id="project-settings-title">Project Settings</h2>
-					<button aria-label="Close settings" type="button" onclick={closeProjectSettings}>Close</button>
+					<button aria-label="Close settings" type="button" onclick={closeProjectSettings}
+						>Close</button
+					>
 				</header>
 
 				<label class="settings-field" for="project-prompt">
