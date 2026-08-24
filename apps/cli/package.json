@@ -1,6 +1,6 @@
 {
   "name": "glyphsmith",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Agent-native SVG editor powered by Geometry AST and patch-based editing.",
   "license": "MIT",
   "type": "module",
