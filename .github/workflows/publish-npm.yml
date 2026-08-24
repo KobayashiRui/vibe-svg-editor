@@ -40,7 +40,7 @@ jobs:
         id: package
         working-directory: apps/cli
         run: |
-          version="$(node -p 'require(\"./package.json\").version')"
+          version="$(node -p 'require("./package.json").version')"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Check whether this version is already published
