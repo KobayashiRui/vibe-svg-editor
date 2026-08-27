@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { GeometryDocument } from '@glyphsmith/ast';
-	import { fitViewportToDocument, renderDocument } from '@glyphsmith/editor';
+	import type { GeometryDocument } from '@vibesvg/ast';
+	import { fitViewportToDocument, renderDocument } from '@vibesvg/editor';
 	import { onMount } from 'svelte';
 
 	let { document }: { document: GeometryDocument } = $props();

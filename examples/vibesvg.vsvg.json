@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "project-glyphsmith-icons",
-  "name": "glyphsmith icons",
+  "id": "project-vibesvg-icons",
+  "name": "vibesvg icons",
   "activePageId": "page-4",
-  "projectPrompt": "Official GlyphSmith icon set. Keep icons simple, geometric, SVG-native, and suitable for 24px outline rendering.",
+  "projectPrompt": "Official VibeSVG icon set. Keep icons simple, geometric, SVG-native, and suitable for 24px outline rendering.",
   "settings": {
     "defaultCanvas": {
       "width": 24,
@@ -25,202 +25,97 @@
           "name": "Root",
           "children": [
             {
-              "id": "app-icon-left-bracket",
-              "type": "path",
-              "name": "Left Rounded Bracket",
-              "start": {
-                "x": 9.25,
-                "y": 3.9845436507936505
-              },
-              "closed": false,
-              "segments": [
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 8.68,
-                    "y": 5.04454365079365
-                  },
-                  "control2": {
-                    "x": 7.95,
-                    "y": 5.7745436507936505
-                  },
-                  "to": {
-                    "x": 7.15,
-                    "y": 6.74454365079365
-                  }
-                },
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 5.8,
-                    "y": 8.39454365079365
-                  },
-                  "control2": {
-                    "x": 4.9,
-                    "y": 9.99454365079365
-                  },
-                  "to": {
-                    "x": 4.9,
-                    "y": 11.94454365079365
-                  }
-                },
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 4.9,
-                    "y": 13.74454365079365
-                  },
-                  "control2": {
-                    "x": 5.78,
-                    "y": 15.044543650793651
-                  },
-                  "to": {
-                    "x": 7.02,
-                    "y": 16.61454365079365
-                  }
-                },
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 7.85,
-                    "y": 17.67454365079365
-                  },
-                  "control2": {
-                    "x": 8.55,
-                    "y": 18.71454365079365
-                  },
-                  "to": {
-                    "x": 9.05,
-                    "y": 19.984543650793647
-                  }
-                }
-              ],
+              "id": "app-icon-v-left-shadow",
+              "type": "line",
+              "name": "Dark arm depth shadow",
+              "x1": 5.52,
+              "y1": 5.93,
+              "x2": 12.2,
+              "y2": 18.63,
               "style": {
                 "fill": "none",
-                "stroke": "#3b82f6",
-                "strokeWidth": 1.95,
+                "stroke": "#202020",
+                "strokeWidth": 5.35,
                 "strokeLinecap": "round",
-                "strokeLinejoin": "round"
+                "opacity": 0.5
               }
             },
             {
-              "id": "app-icon-right-bracket",
-              "type": "path",
-              "name": "Right Filled Bracket",
-              "start": {
-                "x": 14.75,
-                "y": 3.9882605820105823
-              },
-              "closed": false,
-              "segments": [
-                {
-                  "type": "line",
-                  "to": {
-                    "x": 19.096891534391535,
-                    "y": 11.952546296296296
-                  }
-                },
-                {
-                  "type": "line",
-                  "to": {
-                    "x": 14.75,
-                    "y": 19.988260582010582
-                  }
-                }
-              ],
+              "id": "app-icon-v-right-shadow",
+              "type": "line",
+              "name": "Primary arm depth shadow",
+              "x1": 12.2,
+              "y1": 18.63,
+              "x2": 18.8,
+              "y2": 5.73,
               "style": {
                 "fill": "none",
-                "stroke": "#3b82f6",
-                "strokeWidth": 1.95,
+                "stroke": "#202020",
+                "strokeWidth": 5.35,
                 "strokeLinecap": "round",
-                "strokeLinejoin": "round"
+                "opacity": 0.5
               }
             },
             {
-              "id": "app-icon-pen-stem-shape",
-              "type": "path",
-              "name": "Pointed Pen Stem",
-              "start": {
-                "x": 11.36,
-                "y": 12.95
-              },
-              "closed": true,
-              "segments": [
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 11.45,
-                    "y": 14.9
-                  },
-                  "control2": {
-                    "x": 11.56,
-                    "y": 17.25
-                  },
-                  "to": {
-                    "x": 11.83,
-                    "y": 20.25
-                  }
-                },
-                {
-                  "type": "line",
-                  "to": {
-                    "x": 12,
-                    "y": 21.25
-                  }
-                },
-                {
-                  "type": "line",
-                  "to": {
-                    "x": 12.17,
-                    "y": 20.25
-                  }
-                },
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 12.44,
-                    "y": 17.25
-                  },
-                  "control2": {
-                    "x": 12.55,
-                    "y": 14.9
-                  },
-                  "to": {
-                    "x": 12.64,
-                    "y": 12.95
-                  }
-                },
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 12.27,
-                    "y": 13.1
-                  },
-                  "control2": {
-                    "x": 11.73,
-                    "y": 13.1
-                  },
-                  "to": {
-                    "x": 11.36,
-                    "y": 12.95
-                  }
-                }
-              ],
+              "id": "app-icon-v-left",
+              "type": "line",
+              "name": "Dark V arm",
+              "x1": 5.25,
+              "y1": 5.55,
+              "x2": 11.9,
+              "y2": 18.25,
               "style": {
-                "fill": "#3b82f6",
-                "stroke": "none"
+                "fill": "none",
+                "stroke": "#4a4a4a",
+                "strokeWidth": 5.15,
+                "strokeLinecap": "round"
               }
             },
             {
-              "id": "app-icon-pen-node",
-              "type": "circle",
-              "name": "Pen Round Node",
-              "cx": 12,
-              "cy": 11.944874338624338,
-              "r": 1.65,
+              "id": "app-icon-v-right",
+              "type": "line",
+              "name": "Primary V arm",
+              "x1": 11.9,
+              "y1": 18.25,
+              "x2": 18.5,
+              "y2": 5.35,
               "style": {
-                "fill": "#3b82f6",
-                "stroke": "none"
+                "fill": "none",
+                "stroke": "#2f6fed",
+                "strokeWidth": 5.15,
+                "strokeLinecap": "round"
+              }
+            },
+            {
+              "id": "app-icon-v-left-highlight",
+              "type": "line",
+              "name": "Dark arm soft highlight",
+              "x1": 5.04,
+              "y1": 5.27,
+              "x2": 11.69,
+              "y2": 17.97,
+              "style": {
+                "fill": "none",
+                "stroke": "#f2f2f2",
+                "strokeWidth": 3.75,
+                "strokeLinecap": "round",
+                "opacity": 0.22
+              }
+            },
+            {
+              "id": "app-icon-v-right-highlight",
+              "type": "line",
+              "name": "Primary arm soft highlight",
+              "x1": 11.69,
+              "y1": 17.97,
+              "x2": 18.29,
+              "y2": 5.07,
+              "style": {
+                "fill": "none",
+                "stroke": "#6ea4ff",
+                "strokeWidth": 3.75,
+                "strokeLinecap": "round",
+                "opacity": 0.62
               }
             }
           ]
@@ -1426,5 +1321,5 @@
     }
   ],
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-06-22T06:54:01.534Z"
+  "updatedAt": "2026-08-27T12:25:15.445Z"
 }

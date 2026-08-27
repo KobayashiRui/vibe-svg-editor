@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { GeometryDocument } from '@glyphsmith/ast';
+	import type { GeometryDocument } from '@vibesvg/ast';
 	import PageThumbnail from './PageThumbnail.svelte';
 	import { onMount } from 'svelte';
 

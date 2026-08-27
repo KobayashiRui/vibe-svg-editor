@@ -1,45 +1,45 @@
 import {
   getDocumentViewBox,
-  type GlyphSmithProject,
+  type VibeSVGProject,
   type Selection,
-} from "@glyphsmith/ast";
+} from "@vibesvg/ast";
 
 export function mcpResources() {
   return [
     {
-      uri: "glyphsmith://project",
+      uri: "vibesvg://project",
       name: "Project",
-      title: "GlyphSmith Project",
+      title: "VibeSVG Project",
       mimeType: "application/json",
     },
     {
-      uri: "glyphsmith://pages",
+      uri: "vibesvg://pages",
       name: "Pages",
-      title: "GlyphSmith Pages",
+      title: "VibeSVG Pages",
       mimeType: "application/json",
     },
     {
-      uri: "glyphsmith://active-document",
+      uri: "vibesvg://active-document",
       name: "Active Document",
       title: "Active Geometry Document",
       mimeType: "application/json",
     },
     {
-      uri: "glyphsmith://comments",
+      uri: "vibesvg://comments",
       name: "Comments",
       title: "Active Document Comments",
       mimeType: "application/json",
     },
     {
-      uri: "glyphsmith://selection",
+      uri: "vibesvg://selection",
       name: "Selection",
       title: "Editor Selection",
       mimeType: "application/json",
     },
     {
-      uri: "glyphsmith://skill-guide",
+      uri: "vibesvg://skill-guide",
       name: "Skill Guide",
-      title: "GlyphSmith MCP Guide",
+      title: "VibeSVG MCP Guide",
       mimeType: "text/markdown",
     },
   ];
@@ -48,7 +48,7 @@ export function mcpResources() {
 export function mcpResourceTemplates() {
   return [
     {
-      uriTemplate: "glyphsmith://document/{pageId}",
+      uriTemplate: "vibesvg://document/{pageId}",
       name: "Document By Page",
       title: "Geometry Document By Page",
       mimeType: "application/json",
@@ -57,55 +57,55 @@ export function mcpResourceTemplates() {
 }
 
 export function readMcpResource(
-  project: GlyphSmithProject,
+  project: VibeSVGProject,
   selection: Selection,
   revision: string,
   uri: string,
 ) {
   switch (uri) {
-    case "glyphsmith://project":
+    case "vibesvg://project":
       return mcpJsonResource(uri, { project, revision });
-    case "glyphsmith://pages":
+    case "vibesvg://pages":
       return mcpJsonResource(uri, {
         pages: pagesSummary(project),
         activePageId: project.activePageId,
         revision,
       });
-    case "glyphsmith://active-document":
+    case "vibesvg://active-document":
       return mcpJsonResource(uri, {
         document: activePage(project).document,
         pageId: activePage(project).id,
         revision,
       });
-    case "glyphsmith://comments":
+    case "vibesvg://comments":
       return mcpJsonResource(uri, {
         comments: activePage(project).document.comments,
         revision,
       });
-    case "glyphsmith://selection":
+    case "vibesvg://selection":
       return mcpJsonResource(uri, { selection, revision });
-    case "glyphsmith://skill-guide":
+    case "vibesvg://skill-guide":
       return {
         contents: [
           {
             uri,
             mimeType: "text/markdown",
             text: [
-              "# GlyphSmith MCP",
+              "# VibeSVG MCP",
               "",
-              "Use GlyphSmith MCP for active `.gs.json` editor sessions.",
+              "Use VibeSVG MCP for active `.vsvg.json` editor sessions.",
               "Read Geometry AST resources and apply small patch operations.",
               "Do not rewrite raw SVG strings for active editor changes.",
               "",
-              "Before drawing or editing generated artwork, read `glyphsmith://project` or call `project_get` and follow `project.projectPrompt` when it is present.",
+              "Before drawing or editing generated artwork, read `vibesvg://project` or call `project_get` and follow `project.projectPrompt` when it is present.",
             ].join("\n"),
           },
         ],
       };
     default:
-      if (uri.startsWith("glyphsmith://document/")) {
+      if (uri.startsWith("vibesvg://document/")) {
         const pageId = decodeURIComponent(
-          uri.slice("glyphsmith://document/".length),
+          uri.slice("vibesvg://document/".length),
         );
         const page = project.pages.find((item) => item.id === pageId);
 
@@ -124,14 +124,14 @@ export function readMcpResource(
   }
 }
 
-function activePage(project: GlyphSmithProject) {
+function activePage(project: VibeSVGProject) {
   return (
     project.pages.find((page) => page.id === project.activePageId) ??
     project.pages[0]!
   );
 }
 
-function pagesSummary(project: GlyphSmithProject) {
+function pagesSummary(project: VibeSVGProject) {
   return project.pages.map((page) => ({
     id: page.id,
     name: page.name,

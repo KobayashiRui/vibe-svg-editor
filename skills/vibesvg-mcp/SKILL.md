@@ -1,11 +1,11 @@
 ---
-name: glyphsmith-mcp
-description: GlyphSmith MCP workflow guidance for active editor sessions, local host endpoints, resources, tools, page/document reads, patch application, selection-aware edits, SVG export, and project save behavior. Use when a running GlyphSmith CLI host or MCP endpoint is available.
+name: vibesvg-mcp
+description: VibeSVG MCP workflow guidance for active editor sessions, local host endpoints, resources, tools, page/document reads, patch application, selection-aware edits, SVG export, and project save behavior. Use when a running VibeSVG CLI host or MCP endpoint is available.
 ---
 
-# GlyphSmith MCP
+# VibeSVG MCP
 
-Use this skill when an active GlyphSmith editor session exposes a local MCP endpoint.
+Use this skill when an active VibeSVG editor session exposes a local MCP endpoint.
 
 ## Workflow
 
@@ -18,11 +18,11 @@ Use this skill when an active GlyphSmith editor session exposes a local MCP endp
 
 * Do not regenerate a whole SVG when a patch is enough.
 * Do not edit raw SVG strings for active editor changes.
-* Treat `.gs.json` as an implementation detail while the GlyphSmith CLI host is active.
-* Do not directly edit `.gs.json` during active sessions. Use MCP tools so project revisions, autosave, and WebSocket clients stay synchronized.
+* Treat `.vsvg.json` as an implementation detail while the VibeSVG CLI host is active.
+* Do not directly edit `.vsvg.json` during active sessions. Use MCP tools so project revisions, autosave, and WebSocket clients stay synchronized.
 * Prefer page-scoped operations.
 * Keep comments as first-class instructions for agents.
-* Before drawing or editing generated artwork, read `glyphsmith://project` or call `project_get` and follow `project.projectPrompt` when present.
+* Before drawing or editing generated artwork, read `vibesvg://project` or call `project_get` and follow `project.projectPrompt` when present.
 
 ## Expected Local Host
 
@@ -44,26 +44,26 @@ Host:   ws://localhost:6202/ws
 MCP:    http://localhost:6202/mcp
 ```
 
-`pnpm run dev` opens `examples/playground.gs.json`.
-`pnpm run dev:icons` opens `examples/glyphsmith.gs.json`.
+`pnpm run dev` opens `examples/playground.vsvg.json`.
+`pnpm run dev:icons` opens `examples/vibesvg.vsvg.json`.
 
 Register the endpoint with local agents when needed.
 
 ```bash
-glyphsmith mcp install codex --url http://127.0.0.1:6202/mcp
-glyphsmith mcp install claude --url http://127.0.0.1:6202/mcp
+vibesvg mcp install codex --url http://127.0.0.1:6202/mcp
+vibesvg mcp install claude --url http://127.0.0.1:6202/mcp
 ```
 
 ## Resources
 
 ```txt
-glyphsmith://project
-glyphsmith://pages
-glyphsmith://active-document
-glyphsmith://document/{pageId}
-glyphsmith://comments
-glyphsmith://selection
-glyphsmith://skill-guide
+vibesvg://project
+vibesvg://pages
+vibesvg://active-document
+vibesvg://document/{pageId}
+vibesvg://comments
+vibesvg://selection
+vibesvg://skill-guide
 ```
 
 ## Tools
@@ -100,13 +100,13 @@ Use `node_insert`, `node_update`, `node_delete`, and `node_move` for simple crea
 Use `path_create` and `path_segment_*` for path drawing or segment-level curve edits.
 Use `node_insert` / `node_update` for `text` and `group` nodes as normal Geometry AST nodes.
 Pass `revision` when mutating if the current revision is known.
-`glyphsmith://selection` reflects the current editor selection when the web editor is connected to the CLI host.
+`vibesvg://selection` reflects the current editor selection when the web editor is connected to the CLI host.
 
 ## Drawing Workflow
 
 When asked to draw SVG content:
 
-1. Call `project_get` or read `glyphsmith://project` to check `projectPrompt` and revision.
+1. Call `project_get` or read `vibesvg://project` to check `projectPrompt` and revision.
 2. Call `document_get` to read the active document when needed.
 3. Use `document_update` if the requested canvas size differs.
 4. Use `patches_apply` or `node_insert` to add Geometry AST nodes.

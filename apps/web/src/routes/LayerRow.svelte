@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { GeometryNode, NodeId } from '@glyphsmith/ast';
+	import type { GeometryNode, NodeId } from '@vibesvg/ast';
 	import { RestrictToVerticalAxis } from '@dnd-kit/abstract/modifiers';
 	import { createSortable } from '@dnd-kit/svelte/sortable';
 

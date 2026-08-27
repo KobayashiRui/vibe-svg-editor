@@ -6,7 +6,7 @@
 		type DocumentBackground,
 		type GeometryDocument,
 		type GeometryNode,
-		type GlyphSmithProject,
+		type VibeSVGProject,
 		type NodeId,
 		type NodeStyle,
 		type PathNode,
@@ -14,7 +14,7 @@
 		type Segment,
 		type TextNode,
 		type ViewBox
-	} from '@glyphsmith/ast';
+	} from '@vibesvg/ast';
 	import {
 		createAppendPathSegmentPatch,
 		createBasisSplinePathGeometry,
@@ -44,7 +44,7 @@
 		type SnapPoint,
 		type Tool,
 		type Viewport
-	} from '@glyphsmith/editor';
+	} from '@vibesvg/editor';
 	import {
 		applyPatch,
 		findNode,
@@ -53,8 +53,8 @@
 		moveNodeToParent,
 		reorderChildren,
 		ungroupNode
-	} from '@glyphsmith/kernel';
-	import { exportToSvg, importFromSvg } from '@glyphsmith/svg';
+	} from '@vibesvg/kernel';
+	import { exportToSvg, importFromSvg } from '@vibesvg/svg';
 	import { DragDropProvider, type DragDropEventHandlers } from '@dnd-kit/svelte';
 	import { isSortable } from '@dnd-kit/svelte/sortable';
 	import { strToU8, zipSync } from 'fflate';
@@ -66,7 +66,7 @@
 	let canvas: HTMLCanvasElement;
 	let svgImportInput = $state<HTMLInputElement | undefined>();
 	let context = $state<CanvasRenderingContext2D | undefined>();
-	let project = $state<GlyphSmithProject>(initialProjectFromData());
+	let project = $state<VibeSVGProject>(initialProjectFromData());
 	let selectedNodeIds = $state<NodeId[]>([]);
 	let tool = $state<Tool>('select');
 	let pathSegmentMode = $state<PathSegmentMode>('line');
@@ -84,13 +84,13 @@
 	let nextNodeIndex = $state(1);
 	let canvasPixelRatio = $state(1);
 	let snapTarget = $state<SnapPoint | undefined>();
-	let undoStack = $state<GlyphSmithProject[]>([]);
-	let redoStack = $state<GlyphSmithProject[]>([]);
+	let undoStack = $state<VibeSVGProject[]>([]);
+	let redoStack = $state<VibeSVGProject[]>([]);
 	let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>(initialSaveStatusFromData());
 	let hostStatus = $state<'disabled' | 'connecting' | 'connected' | 'error'>('disabled');
-	let liveEditStartProject: GlyphSmithProject | undefined;
+	let liveEditStartProject: VibeSVGProject | undefined;
 	let liveEditDidChange = false;
-	let settingsEditStartProject: GlyphSmithProject | undefined;
+	let settingsEditStartProject: VibeSVGProject | undefined;
 	let hostSocket: WebSocket | undefined;
 	let hostSyncTimer: ReturnType<typeof setTimeout> | undefined;
 	let hostReconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -102,7 +102,7 @@
 	let svgExportOpen = $state(false);
 	let editingGroupId = $state<NodeId | undefined>();
 	let expandedGroupIds = $state<NodeId[]>([]);
-	let layerDragStartProject: GlyphSmithProject | undefined;
+	let layerDragStartProject: VibeSVGProject | undefined;
 	let layerDragNodeId = $state<NodeId | undefined>();
 	let layerContextMenu = $state<{ nodeId?: NodeId; x: number; y: number } | undefined>();
 	let pageContextMenu = $state<{ pageId: string; x: number; y: number } | undefined>();
@@ -185,9 +185,9 @@
 		selectedNodeIds[0] ? findNode(geometryDocument, selectedNodeIds[0]) : undefined
 	);
 
-	function initialProjectFromData(): GlyphSmithProject {
+	function initialProjectFromData(): VibeSVGProject {
 		return createProject({
-			name: 'GlyphSmith Project',
+			name: 'VibeSVG Project',
 			width: 256,
 			height: 256
 		});
@@ -2301,7 +2301,7 @@
 			return;
 		}
 
-		const projectSlug = fileSafeName(project.name || 'glyphsmith-project');
+		const projectSlug = fileSafeName(project.name || 'vibesvg-project');
 		const usedNames = new Map<string, number>();
 		const entries: Record<string, Uint8Array> = {};
 
@@ -2335,7 +2335,7 @@
 		const snapshot = cloneProject(project);
 		downloadTextFile(
 			JSON.stringify(snapshot, null, 2),
-			`${fileSafeName(project.name || 'glyphsmith')}.gs.json`,
+			`${fileSafeName(project.name || 'vibesvg')}.vsvg.json`,
 			'application/json'
 		);
 	}
@@ -2345,7 +2345,7 @@
 			value
 				.trim()
 				.replace(/[^a-z0-9-_]+/gi, '-')
-				.replace(/^-+|-+$/g, '') || 'glyphsmith'
+				.replace(/^-+|-+$/g, '') || 'vibesvg'
 		);
 	}
 
@@ -2428,8 +2428,8 @@
 			return undefined;
 		}
 
-		if (import.meta.env.VITE_GLYPHSMITH_HOST_WS_URL) {
-			return import.meta.env.VITE_GLYPHSMITH_HOST_WS_URL;
+		if (import.meta.env.VITE_VIBESVG_HOST_WS_URL) {
+			return import.meta.env.VITE_VIBESVG_HOST_WS_URL;
 		}
 
 		if (import.meta.env.DEV) {
@@ -2469,7 +2469,7 @@
 
 	function isHostMessage(
 		message: unknown
-	): message is { type: 'project:ack' } | { type: 'project:snapshot'; project: GlyphSmithProject } {
+	): message is { type: 'project:ack' } | { type: 'project:snapshot'; project: VibeSVGProject } {
 		return Boolean(
 			message &&
 			typeof message === 'object' &&
@@ -2481,7 +2481,7 @@
 		);
 	}
 
-	function isProjectLike(value: unknown): value is GlyphSmithProject {
+	function isProjectLike(value: unknown): value is VibeSVGProject {
 		return Boolean(
 			value &&
 			typeof value === 'object' &&
@@ -2492,8 +2492,8 @@
 		);
 	}
 
-	function applyRemoteProject(nextProject: GlyphSmithProject) {
-		project = structuredClone(nextProject) as GlyphSmithProject;
+	function applyRemoteProject(nextProject: VibeSVGProject) {
+		project = structuredClone(nextProject) as VibeSVGProject;
 		nextNodeIndex = Math.max(nextNodeIndex, nextNodeIndexFromProject(project));
 		undoStack = [];
 		redoStack = [];
@@ -2553,11 +2553,11 @@
 		);
 	}
 
-	function projectsEqual(left: GlyphSmithProject, right: GlyphSmithProject) {
+	function projectsEqual(left: VibeSVGProject, right: VibeSVGProject) {
 		return JSON.stringify($state.snapshot(left)) === JSON.stringify(right);
 	}
 
-	function nextNodeIndexFromProject(sourceProject: GlyphSmithProject) {
+	function nextNodeIndexFromProject(sourceProject: VibeSVGProject) {
 		let maxIndex = 0;
 
 		for (const page of sourceProject.pages) {
@@ -2587,8 +2587,8 @@
 		return structuredClone($state.snapshot(documentToClone)) as GeometryDocument;
 	}
 
-	function cloneProject(projectToClone: GlyphSmithProject): GlyphSmithProject {
-		return structuredClone($state.snapshot(projectToClone)) as GlyphSmithProject;
+	function cloneProject(projectToClone: VibeSVGProject): VibeSVGProject {
+		return structuredClone($state.snapshot(projectToClone)) as VibeSVGProject;
 	}
 
 	function updateActiveDocument(document: GeometryDocument) {
@@ -3103,7 +3103,7 @@
 </script>
 
 <svelte:head>
-	<title>GlyphSmith</title>
+	<title>VibeSVG</title>
 </svelte:head>
 
 <div class="app-shell">

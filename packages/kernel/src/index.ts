@@ -6,7 +6,7 @@ import type {
   PatchOperation,
   Point,
   ViewBox,
-} from "@glyphsmith/ast";
+} from "@vibesvg/ast";
 
 export function applyPatch(
   document: GeometryDocument,

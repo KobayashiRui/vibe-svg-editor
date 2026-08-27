@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "project-playground",
-  "name": "GlyphSmith Playground",
+  "name": "VibeSVG Playground",
   "activePageId": "page-playground",
-  "projectPrompt": "Use this project to verify general GlyphSmith editor behavior across shapes, paths, text, groups, import/export, and page navigation.",
+  "projectPrompt": "Use this project to verify general VibeSVG editor behavior across shapes, paths, text, groups, import/export, and page navigation.",
   "settings": {
     "defaultCanvas": {
       "width": 512,
@@ -111,7 +111,7 @@
               "name": "Multiline Text",
               "x": 96,
               "y": 430,
-              "text": "GlyphSmith\nPlayground",
+              "text": "VibeSVG\nPlayground",
               "fill": "#111827",
               "fontFamily": "Inter, system-ui, sans-serif",
               "fontSize": 32,

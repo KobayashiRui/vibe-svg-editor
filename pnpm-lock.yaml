@@ -23,13 +23,13 @@ importers:
 
   apps/cli:
     devDependencies:
-      '@glyphsmith/ast':
+      '@vibesvg/ast':
         specifier: workspace:*
         version: link:../../packages/ast
-      '@glyphsmith/mcp':
+      '@vibesvg/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
-      '@glyphsmith/svg':
+      '@vibesvg/svg':
         specifier: workspace:*
         version: link:../../packages/svg
       '@repo/typescript-config':
@@ -53,16 +53,16 @@ importers:
       '@dnd-kit/svelte':
         specifier: ^0.4.0
         version: 0.4.0(svelte@5.56.2(@typescript-eslint/types@8.60.1))
-      '@glyphsmith/ast':
+      '@vibesvg/ast':
         specifier: workspace:*
         version: link:../../packages/ast
-      '@glyphsmith/editor':
+      '@vibesvg/editor':
         specifier: workspace:*
         version: link:../../packages/editor
-      '@glyphsmith/kernel':
+      '@vibesvg/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@glyphsmith/svg':
+      '@vibesvg/svg':
         specifier: workspace:*
         version: link:../../packages/svg
       fflate:
@@ -138,7 +138,7 @@ importers:
 
   packages/editor:
     dependencies:
-      '@glyphsmith/ast':
+      '@vibesvg/ast':
         specifier: workspace:*
         version: link:../ast
     devDependencies:
@@ -187,7 +187,7 @@ importers:
 
   packages/kernel:
     dependencies:
-      '@glyphsmith/ast':
+      '@vibesvg/ast':
         specifier: workspace:*
         version: link:../ast
     devDependencies:
@@ -200,13 +200,13 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@glyphsmith/ast':
+      '@vibesvg/ast':
         specifier: workspace:*
         version: link:../ast
-      '@glyphsmith/kernel':
+      '@vibesvg/kernel':
         specifier: workspace:*
         version: link:../kernel
-      '@glyphsmith/svg':
+      '@vibesvg/svg':
         specifier: workspace:*
         version: link:../svg
     devDependencies:
@@ -219,7 +219,7 @@ importers:
 
   packages/svg:
     dependencies:
-      '@glyphsmith/ast':
+      '@vibesvg/ast':
         specifier: workspace:*
         version: link:../ast
     devDependencies:

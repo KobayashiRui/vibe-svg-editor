@@ -1,17 +1,17 @@
 ---
-name: glyphsmith-patch
-description: GlyphSmith patch operation guidance for targeted Geometry AST edits, node insert/update/delete/move patterns, path segment edits, groups, text, and patch-based SVG-equivalent drawing. Use when generating patches instead of rewriting documents.
+name: vibesvg-patch
+description: VibeSVG patch operation guidance for targeted Geometry AST edits, node insert/update/delete/move patterns, path segment edits, groups, text, and patch-based SVG-equivalent drawing. Use when generating patches instead of rewriting documents.
 ---
 
-# GlyphSmith Patch
+# VibeSVG Patch
 
-Use this skill when creating patch operations for GlyphSmith Geometry AST.
+Use this skill when creating patch operations for VibeSVG Geometry AST.
 
 ## Patch Principles
 
 Prefer targeted patches.
 
-During an active GlyphSmith editor/MCP session, apply patches through MCP tools instead of directly editing `.gs.json`. Direct project-file edits are an offline fallback only.
+During an active VibeSVG editor/MCP session, apply patches through MCP tools instead of directly editing `.vsvg.json`. Direct project-file edits are an offline fallback only.
 
 ```json
 {
@@ -167,7 +167,7 @@ Text:
   "type": "text",
   "x": 256,
   "y": 448,
-  "text": "GlyphSmith\nIcon",
+  "text": "VibeSVG\nIcon",
   "fill": "#111827",
   "fontFamily": "Inter, system-ui, sans-serif",
   "fontSize": 32,

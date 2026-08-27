@@ -7,7 +7,7 @@ import {
   type Point,
   type Segment,
   type ViewBox,
-} from "@glyphsmith/ast";
+} from "@vibesvg/ast";
 
 export function exportToSvg(document: GeometryDocument): string {
   const children = document.root.children.map(renderNode).join("");

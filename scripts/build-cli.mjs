@@ -7,17 +7,17 @@ const cliEntry = resolve(root, "apps/cli/src/index.ts");
 const cliOutput = resolve(root, "apps/cli/dist/index.js");
 
 const internalPackageEntries = new Map([
-  ["@glyphsmith/ast", "packages/ast/src/index.ts"],
-  ["@glyphsmith/editor", "packages/editor/src/index.ts"],
-  ["@glyphsmith/kernel", "packages/kernel/src/index.ts"],
-  ["@glyphsmith/mcp", "packages/mcp/src/index.ts"],
-  ["@glyphsmith/svg", "packages/svg/src/index.ts"]
+  ["@vibesvg/ast", "packages/ast/src/index.ts"],
+  ["@vibesvg/editor", "packages/editor/src/index.ts"],
+  ["@vibesvg/kernel", "packages/kernel/src/index.ts"],
+  ["@vibesvg/mcp", "packages/mcp/src/index.ts"],
+  ["@vibesvg/svg", "packages/svg/src/index.ts"]
 ]);
 
 const internalWorkspacePlugin = {
-  name: "glyphsmith-internal-workspace",
+  name: "vibesvg-internal-workspace",
   setup(builder) {
-    builder.onResolve({ filter: /^@glyphsmith\/[a-z-]+$/ }, (args) => {
+    builder.onResolve({ filter: /^@vibesvg\/[a-z-]+$/ }, (args) => {
       const entry = internalPackageEntries.get(args.path);
 
       if (!entry) {

@@ -1,20 +1,20 @@
 ---
-name: glyphsmith-ast
-description: GlyphSmith Geometry AST schema guidance for project files, pages, documents, groups, paths, segments, shapes, text nodes, styling fields, and SVG-compatible geometry. Use when inspecting or constructing Geometry AST data for GlyphSmith.
+name: vibesvg-ast
+description: VibeSVG Geometry AST schema guidance for project files, pages, documents, groups, paths, segments, shapes, text nodes, styling fields, and SVG-compatible geometry. Use when inspecting or constructing Geometry AST data for VibeSVG.
 ---
 
-# GlyphSmith AST
+# VibeSVG AST
 
-Use this skill when inspecting or changing GlyphSmith Geometry AST data.
+Use this skill when inspecting or changing VibeSVG Geometry AST data.
 
 ## Geometry AST
 
-The project file is a `GlyphSmithProject`.
+The project file is a `VibeSVGProject`.
 
-Do not directly edit `.gs.json` during an active GlyphSmith editor/MCP session. Use MCP tools for active sessions, and treat direct project-file edits as an offline fallback for examples, fixtures, or migrations.
+Do not directly edit `.vsvg.json` during an active VibeSVG editor/MCP session. Use MCP tools for active sessions, and treat direct project-file edits as an offline fallback for examples, fixtures, or migrations.
 
 ```txt
-GlyphSmithProject
+VibeSVGProject
 └ Page[]
   └ GeometryDocument
     └ GeometryNode tree
@@ -44,7 +44,7 @@ Line breaks are represented with `\n`.
   "type": "text",
   "x": 128,
   "y": 160,
-  "text": "GlyphSmith\nIcon",
+  "text": "VibeSVG\nIcon",
   "fill": "#111827",
   "fontFamily": "Inter, system-ui, sans-serif",
   "fontSize": 24,

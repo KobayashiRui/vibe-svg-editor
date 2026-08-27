@@ -38,10 +38,10 @@
 	"dependencies": {
 		"@dnd-kit/abstract": "0.4.0",
 		"@dnd-kit/svelte": "^0.4.0",
-		"@glyphsmith/ast": "workspace:*",
-		"@glyphsmith/editor": "workspace:*",
-		"@glyphsmith/kernel": "workspace:*",
-		"@glyphsmith/svg": "workspace:*",
+		"@vibesvg/ast": "workspace:*",
+		"@vibesvg/editor": "workspace:*",
+		"@vibesvg/kernel": "workspace:*",
+		"@vibesvg/svg": "workspace:*",
 		"fflate": "^0.8.3"
 	}
 }

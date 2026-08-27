@@ -1,15 +1,15 @@
-import type { Selection } from "@glyphsmith/ast";
+import type { Selection } from "@vibesvg/ast";
 import { jsonRpcError, jsonRpcResult, type JsonRpcRequest, type JsonRpcResponse } from "./json-rpc.js";
 import { mcpResources, mcpResourceTemplates, readMcpResource } from "./resources.js";
-import { callMcpTool, mcpTools, type GlyphSmithMcpStore, type ToolContext } from "./tools.js";
+import { callMcpTool, mcpTools, type VibeSVGMcpStore, type ToolContext } from "./tools.js";
 
-export type GlyphSmithMcpContext = ToolContext & {
-  store: GlyphSmithMcpStore & {
+export type VibeSVGMcpContext = ToolContext & {
+  store: VibeSVGMcpStore & {
     selection(): Selection;
   };
 };
 
-export async function handleMcpBody(context: GlyphSmithMcpContext, body: unknown): Promise<JsonRpcResponse | JsonRpcResponse[] | null> {
+export async function handleMcpBody(context: VibeSVGMcpContext, body: unknown): Promise<JsonRpcResponse | JsonRpcResponse[] | null> {
   if (Array.isArray(body)) {
     const responses = await Promise.all(body.map((item) => handleMcpMessage(context, item)));
     const filteredResponses = responses.filter((response): response is JsonRpcResponse => Boolean(response));
@@ -20,7 +20,7 @@ export async function handleMcpBody(context: GlyphSmithMcpContext, body: unknown
   return handleMcpMessage(context, body);
 }
 
-export async function handleMcpMessage(context: GlyphSmithMcpContext, rawRequest: unknown): Promise<JsonRpcResponse | null> {
+export async function handleMcpMessage(context: VibeSVGMcpContext, rawRequest: unknown): Promise<JsonRpcResponse | null> {
   const request = rawRequest as JsonRpcRequest;
 
   if (request.id === undefined || request.id === null) {
@@ -37,7 +37,7 @@ export async function handleMcpMessage(context: GlyphSmithMcpContext, rawRequest
             resources: { subscribe: false, listChanged: false }
           },
           serverInfo: {
-            name: "glyphsmith",
+            name: "vibesvg",
             version: "0.0.0"
           }
         });

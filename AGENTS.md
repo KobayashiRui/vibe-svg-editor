@@ -1,8 +1,8 @@
-# GlyphSmith
+# VibeSVG
 
 Agent-native SVG editor powered by Geometry AST and patch-based editing.
 
-GlyphSmith is an open-source SVG editor designed for AI agents such as:
+VibeSVG is an open-source SVG editor designed for AI agents such as:
 
 * Codex
 * Claude Code
@@ -16,7 +16,7 @@ The editor supports both manual editing and AI-driven editing using a shared Geo
 
 Traditional AI SVG workflows regenerate entire SVG files.
 
-GlyphSmith takes a different approach.
+VibeSVG takes a different approach.
 
 ```txt
 SVG
@@ -112,7 +112,7 @@ Keep the architecture simple.
 # Repository Structure
 
 ```txt
-glyphsmith/
+vibesvg/
 
 apps/
 ├ cli/
@@ -161,7 +161,7 @@ Launches:
 Example:
 
 ```bash
-npx glyphsmith
+npx vibesvg
 ```
 
 Expected behavior:
@@ -180,59 +180,59 @@ The CLI host is the local coordination process for editor sessions, project file
 The web editor should connect to the CLI host through WebSocket and exchange Geometry AST project snapshots or patch-based updates.
 MCP shares the same host process so agent edits and manual editor edits stay synchronized.
 
-Project file paths passed to the CLI may omit `.gs.json`.
+Project file paths passed to the CLI may omit `.vsvg.json`.
 
 Examples:
 
 ```bash
-glyphsmith
-glyphsmith logo
-glyphsmith logo.gs.json
-glyphsmith init logo
+vibesvg
+vibesvg logo
+vibesvg logo.vsvg.json
+vibesvg init logo
 ```
 
 Expected path resolution:
 
 ```txt
-glyphsmith          -> ./glyphsmith.gs.json
-glyphsmith logo     -> ./logo.gs.json
-glyphsmith logo.gs.json -> ./logo.gs.json
+vibesvg          -> ./vibesvg.vsvg.json
+vibesvg logo     -> ./logo.vsvg.json
+vibesvg logo.vsvg.json -> ./logo.vsvg.json
 ```
 
 If the resolved project file does not exist, the CLI should create it and continue without prompting.
 
-Keep CLI behavior deterministic and non-interactive so installed agent skills can launch GlyphSmith reliably.
+Keep CLI behavior deterministic and non-interactive so installed agent skills can launch VibeSVG reliably.
 
 The repository-level `pnpm run dev` command should use Turborepo to run `apps/cli` and `apps/web` as separate dev processes.
 
 Examples are treated as first-class projects.
 
 ```txt
-examples/playground.gs.json
-examples/glyphsmith.gs.json
+examples/playground.vsvg.json
+examples/vibesvg.vsvg.json
 ```
 
-`examples/playground.gs.json` is the default development project.
-`examples/glyphsmith.gs.json` contains the official GlyphSmith icon set.
+`examples/playground.vsvg.json` is the default development project.
+`examples/vibesvg.vsvg.json` contains the official VibeSVG icon set.
 
 When implementing editor features, verify functionality using both:
 
-* `examples/playground.gs.json`
-* `examples/glyphsmith.gs.json`
+* `examples/playground.vsvg.json`
+* `examples/vibesvg.vsvg.json`
 
 Do not hardcode assumptions about a specific example project.
 
 Development defaults:
 
 ```txt
-Project: examples/playground.gs.json
+Project: examples/playground.vsvg.json
 UI:      http://localhost:6201
 Host:    ws://localhost:6202/ws
 MCP:     http://localhost:6202/mcp
 ```
 
-`pnpm run dev` should open `examples/playground.gs.json`.
-`pnpm run dev:icons` should open `examples/glyphsmith.gs.json`.
+`pnpm run dev` should open `examples/playground.vsvg.json`.
+`pnpm run dev:icons` should open `examples/vibesvg.vsvg.json`.
 
 Development scripts pass fixed ports. If `6201` or `6202` is unavailable, fail clearly instead of falling back to another port, because web and host are launched as separate processes.
 In CLI behavior, explicit `--port` values are fixed ports.
@@ -243,7 +243,7 @@ When ports are omitted in normal CLI usage, the CLI may find the next available 
 In monorepo development, `apps/web` owns the Vite dev server and `apps/cli` should run only the CLI host through:
 
 ```bash
-glyphsmith host --example playground
+vibesvg host --example playground
 ```
 
 Use `--example <name>` for development scripts instead of relative paths such as `../../examples/playground`.
@@ -252,8 +252,8 @@ The CLI resolves examples from the repository/package root.
 MCP registration commands:
 
 ```bash
-glyphsmith mcp install codex --url http://127.0.0.1:6202/mcp
-glyphsmith mcp install claude --url http://127.0.0.1:6202/mcp
+vibesvg mcp install codex --url http://127.0.0.1:6202/mcp
+vibesvg mcp install claude --url http://127.0.0.1:6202/mcp
 ```
 
 When Claude Code CLI registration is unavailable, pass `--project <project-dir>` to write a project-local `.mcp.json`.
@@ -261,8 +261,8 @@ When Claude Code CLI registration is unavailable, pass `--project <project-dir>`
 Skill installation commands:
 
 ```bash
-glyphsmith skills install codex
-glyphsmith skills install claude
+vibesvg skills install codex
+vibesvg skills install claude
 ```
 
 Codex skills are installed into `$CODEX_HOME/skills` or `~/.codex/skills`.
@@ -271,7 +271,7 @@ Claude skills are installed into `$CLAUDE_HOME/skills` or `~/.claude/skills`.
 
 For project-local Claude skills, pass `--project <project-dir>` to install into `<project-dir>/.claude/skills`.
 
-Use `--force` to replace existing GlyphSmith skills.
+Use `--force` to replace existing VibeSVG skills.
 
 ---
 
@@ -343,13 +343,13 @@ MCP server implementation.
 
 Exposed resources:
 
-* glyphsmith://project
-* glyphsmith://pages
-* glyphsmith://active-document
-* glyphsmith://document/{pageId}
-* glyphsmith://comments
-* glyphsmith://selection
-* glyphsmith://skill-guide
+* vibesvg://project
+* vibesvg://pages
+* vibesvg://active-document
+* vibesvg://document/{pageId}
+* vibesvg://comments
+* vibesvg://selection
+* vibesvg://skill-guide
 
 Exposed tools:
 
@@ -379,8 +379,8 @@ Exposed tools:
 
 Mutation tools should accept `revision` when possible and should support `dryRun` for edits that can be previewed.
 MCP mutations must write through the CLI ProjectStore so WebSocket clients receive project snapshot updates.
-Default agent behavior is to avoid direct `.gs.json` edits.
-When an active CLI host or MCP server is running, agents must not edit `.gs.json` directly. Use MCP tools so the editor, revision, autosave, and WebSocket sync stay consistent.
+Default agent behavior is to avoid direct `.vsvg.json` edits.
+When an active CLI host or MCP server is running, agents must not edit `.vsvg.json` directly. Use MCP tools so the editor, revision, autosave, and WebSocket sync stay consistent.
 Direct project file edits are fallback-only for offline workflows where no active editor/MCP host is available, such as examples, fixtures, or migrations.
 
 AI agents should interact through these APIs.
@@ -422,12 +422,12 @@ Geometry AST is the internal representation.
 
 ## Project Files
 
-GlyphSmith project files use the `.gs.json` extension.
+VibeSVG project files use the `.vsvg.json` extension.
 
 Project files may contain multiple pages.
 
 ```txt
-GlyphSmithProject
+VibeSVGProject
 └ Page[]
   └ GeometryDocument
     └ SVG-equivalent Geometry AST
@@ -604,7 +604,7 @@ Keep these as follow-up tasks unless the user explicitly asks to implement them:
 
 * Optimize page thumbnail rendering so only changed pages redraw.
 * Add page rename and drag-to-reorder in the bottom page strip.
-* Add project-level dirty-state handling for `.gs.json`.
+* Add project-level dirty-state handling for `.vsvg.json`.
 * Add a UI affordance to copy the current MCP URL and install commands.
 * Add authenticated MCP mode for non-default deployment contexts.
 * Preserve project/page metadata when importing or exporting multiple SVG files.

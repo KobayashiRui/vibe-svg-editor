@@ -5,7 +5,7 @@ import type { Socket } from "node:net";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { handleMcpBody } from "@glyphsmith/mcp";
+import { handleMcpBody } from "@vibesvg/mcp";
 import type { ProjectStore } from "./project-store.js";
 import { WebSocketHub } from "./websocket.js";
 
@@ -67,7 +67,7 @@ function createHostApp(options: HostServerOptions): Hono {
   app.get("/health", (context) => {
     return context.json({
       ok: true,
-      server: "glyphsmith-cli",
+      server: "vibesvg-cli",
       mcpUrl: options.mcpUrl,
       projectFile: options.store.projectFile
     });

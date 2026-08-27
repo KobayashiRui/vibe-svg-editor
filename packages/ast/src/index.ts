@@ -218,7 +218,7 @@ export type GeometryDocument = {
   comments: Comment[];
 };
 
-export type GlyphSmithPage = {
+export type VibeSVGPage = {
   id: string;
   name: string;
   document: GeometryDocument;
@@ -231,14 +231,14 @@ export type ProjectSettings = {
   };
 };
 
-export type GlyphSmithProject = {
+export type VibeSVGProject = {
   schemaVersion: 1;
   id: string;
   name: string;
   activePageId: string;
   projectPrompt?: string;
   settings?: ProjectSettings;
-  pages: GlyphSmithPage[];
+  pages: VibeSVGPage[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -344,7 +344,7 @@ export function getDocumentViewBox(document: GeometryDocument): ViewBox {
   );
 }
 
-export function createPage(options: CreatePageOptions = {}): GlyphSmithPage {
+export function createPage(options: CreatePageOptions = {}): VibeSVGPage {
   const pageId = options.pageId ?? "page-1";
   const name = options.name ?? "Page 1";
 
@@ -363,7 +363,7 @@ export function createPage(options: CreatePageOptions = {}): GlyphSmithPage {
 
 export function createProject(
   options: CreateProjectOptions = {},
-): GlyphSmithProject {
+): VibeSVGProject {
   const firstPage = createPage({
     pageId: options.pageId,
     id: options.documentId,
@@ -392,9 +392,9 @@ export function createProject(
   };
 }
 
-export function isGlyphSmithProject(
+export function isVibeSVGProject(
   value: unknown,
-): value is GlyphSmithProject {
+): value is VibeSVGProject {
   if (!isRecord(value)) {
     return false;
   }
@@ -432,7 +432,7 @@ export function isGlyphSmithProject(
   }
 
   return (
-    value.pages.every(isGlyphSmithPage) &&
+    value.pages.every(isVibeSVGPage) &&
     value.pages.some((page) => page.id === value.activePageId)
   );
 }
@@ -459,7 +459,7 @@ function isProjectSettings(value: unknown): value is ProjectSettings {
   return true;
 }
 
-function isGlyphSmithPage(value: unknown): value is GlyphSmithPage {
+function isVibeSVGPage(value: unknown): value is VibeSVGPage {
   if (!isRecord(value)) {
     return false;
   }

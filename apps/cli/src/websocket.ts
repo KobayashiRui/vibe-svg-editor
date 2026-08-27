@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { Socket } from "node:net";
-import { isGlyphSmithProject } from "@glyphsmith/ast";
+import { isVibeSVGProject } from "@vibesvg/ast";
 import type { ProjectStore } from "./project-store.js";
 
 const webSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -110,7 +110,7 @@ export class WebSocketHub {
       return;
     }
 
-    if (isProjectUpdateMessage(payload) && isGlyphSmithProject(payload.project)) {
+    if (isProjectUpdateMessage(payload) && isVibeSVGProject(payload.project)) {
       this.store.writeProject(payload.project, client);
       this.sendJson(client.socket, { type: "project:ack", revision: this.store.revision() });
       return;

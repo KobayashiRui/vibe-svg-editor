@@ -1,4 +1,4 @@
-import { getDocumentViewBox } from "@glyphsmith/ast";
+import { getDocumentViewBox } from "@vibesvg/ast";
 import type {
   Bounds,
   DocumentBackground,
@@ -17,7 +17,7 @@ import type {
   Segment,
   TextNode,
   UpdatePatch,
-} from "@glyphsmith/ast";
+} from "@vibesvg/ast";
 
 export type Tool = "select" | "rect" | "ellipse" | "triangle" | "path" | "text";
 export type PathSegmentMode =

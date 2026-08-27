@@ -3,29 +3,29 @@ import {
   getDocumentViewBox,
   type GeometryDocument,
   type GeometryNode,
-  type GlyphSmithPage,
-  type GlyphSmithProject,
+  type VibeSVGPage,
+  type VibeSVGProject,
   type PathNode,
   type PatchOperation,
   type Point,
   type Segment,
   type Selection,
-} from "@glyphsmith/ast";
-import { applyPatch, applyPatches } from "@glyphsmith/kernel";
-import { exportToSvg } from "@glyphsmith/svg";
+} from "@vibesvg/ast";
+import { applyPatch, applyPatches } from "@vibesvg/kernel";
+import { exportToSvg } from "@vibesvg/svg";
 
-export type GlyphSmithMcpStore = {
-  readProject(): GlyphSmithProject;
+export type VibeSVGMcpStore = {
+  readProject(): VibeSVGProject;
   writeProject(
-    project: GlyphSmithProject,
+    project: VibeSVGProject,
     source?: unknown,
-  ): { project: GlyphSmithProject; revision: string };
+  ): { project: VibeSVGProject; revision: string };
   revision(): string;
   selection(): Selection;
 };
 
 export type ToolContext = {
-  store: GlyphSmithMcpStore;
+  store: VibeSVGMcpStore;
 };
 
 export function mcpTools() {
@@ -33,12 +33,12 @@ export function mcpTools() {
     {
       name: "project_get",
       description:
-        "Read the active GlyphSmith project, including projectPrompt when present.",
+        "Read the active VibeSVG project, including projectPrompt when present.",
       inputSchema: { type: "object", properties: {} },
     },
     {
       name: "pages_list",
-      description: "List pages in the active GlyphSmith project.",
+      description: "List pages in the active VibeSVG project.",
       inputSchema: { type: "object", properties: {} },
     },
     {
@@ -839,10 +839,10 @@ function assertRevision(context: ToolContext, revision: string | undefined) {
 }
 
 function updatePageDocument(
-  project: GlyphSmithProject,
+  project: VibeSVGProject,
   pageId: string,
   document: GeometryDocument,
-): GlyphSmithProject {
+): VibeSVGProject {
   return touchProject({
     ...project,
     pages: project.pages.map((page) =>
@@ -880,7 +880,7 @@ function findNode(
   return undefined;
 }
 
-function touchProject(project: GlyphSmithProject): GlyphSmithProject {
+function touchProject(project: VibeSVGProject): VibeSVGProject {
   return {
     ...project,
     updatedAt: new Date().toISOString(),
@@ -888,9 +888,9 @@ function touchProject(project: GlyphSmithProject): GlyphSmithProject {
 }
 
 function pageByOptionalId(
-  project: GlyphSmithProject,
+  project: VibeSVGProject,
   pageId?: string,
-): GlyphSmithPage {
+): VibeSVGPage {
   const page = pageId
     ? project.pages.find((item) => item.id === pageId)
     : (project.pages.find((item) => item.id === project.activePageId) ??
@@ -905,7 +905,7 @@ function pageByOptionalId(
   return page;
 }
 
-function pageSummary(page: GlyphSmithPage) {
+function pageSummary(page: VibeSVGPage) {
   return {
     id: page.id,
     name: page.name,
@@ -917,7 +917,7 @@ function pageSummary(page: GlyphSmithPage) {
   };
 }
 
-function nextPageId(project: GlyphSmithProject): string {
+function nextPageId(project: VibeSVGProject): string {
   let index = project.pages.length + 1;
 
   while (project.pages.some((page) => page.id === `page-${index}`)) {
