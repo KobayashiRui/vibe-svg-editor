@@ -12,6 +12,7 @@ import {
   type Segment,
   type Selection,
 } from "@vibesvg/ast";
+import { Resvg } from "@resvg/resvg-js";
 import { applyPatch, applyPatches } from "@vibesvg/kernel";
 import { exportToSvg } from "@vibesvg/svg";
 
@@ -161,6 +162,39 @@ export function mcpTools() {
       },
     },
     {
+      name: "node_reorder",
+      description:
+        "Reorder one node within its current group. Index 0 is back; the final index is front.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pageId: { type: "string" },
+          target: { type: "string" },
+          index: { type: "number" },
+          revision: { type: "string" },
+          dryRun: { type: "boolean" },
+        },
+        required: ["target", "index"],
+      },
+    },
+    {
+      name: "node_reparent",
+      description:
+        "Move one node into a group at an optional child index. Omit index to place it at the front.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pageId: { type: "string" },
+          target: { type: "string" },
+          parentId: { type: "string" },
+          index: { type: "number" },
+          revision: { type: "string" },
+          dryRun: { type: "boolean" },
+        },
+        required: ["target", "parentId"],
+      },
+    },
+    {
       name: "document_update",
       description:
         "Update active document metadata such as name, SVG output width/height, or viewBox.",
@@ -190,6 +224,22 @@ export function mcpTools() {
           dryRun: { type: "boolean" },
         },
         required: ["changes"],
+      },
+    },
+    {
+      name: "document_render",
+      description:
+        "Render a page document to a PNG preview without changing the project.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pageId: { type: "string" },
+          scale: { type: "number", minimum: 1, maximum: 4 },
+          background: {
+            type: "string",
+            enum: ["document", "transparent"],
+          },
+        },
       },
     },
     {
@@ -433,8 +483,14 @@ export function callMcpTool(
       return mcpText(nodeDeleteTool(context, args));
     case "node_move":
       return mcpText(nodeMoveTool(context, args));
+    case "node_reorder":
+      return mcpText(nodeReorderTool(context, args));
+    case "node_reparent":
+      return mcpText(nodeReparentTool(context, args));
     case "document_update":
       return mcpText(documentUpdateTool(context, args));
+    case "document_render":
+      return documentRenderTool(context, args);
     case "gradient_upsert":
       return mcpText(gradientUpsertTool(context, args));
     case "gradient_delete":
@@ -546,6 +602,30 @@ function nodeMoveTool(context: ToolContext, args: Record<string, unknown>) {
   ]);
 }
 
+function nodeReorderTool(context: ToolContext, args: Record<string, unknown>) {
+  return applyPatchOperations(context, args, [
+    {
+      op: "reorder",
+      target: requiredString(args.target, "target"),
+      index: requiredNonNegativeInteger(args.index, "index"),
+    },
+  ]);
+}
+
+function nodeReparentTool(context: ToolContext, args: Record<string, unknown>) {
+  return applyPatchOperations(context, args, [
+    {
+      op: "reparent",
+      target: requiredString(args.target, "target"),
+      parentId: requiredString(args.parentId, "parentId"),
+      index:
+        args.index === undefined
+          ? undefined
+          : requiredNonNegativeInteger(args.index, "index"),
+    },
+  ]);
+}
+
 function documentUpdateTool(
   context: ToolContext,
   args: Record<string, unknown>,
@@ -561,6 +641,32 @@ function documentUpdateTool(
       >,
     },
   ]);
+}
+
+function documentRenderTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
+  const project = context.store.readProject();
+  const page = pageByOptionalId(project, optionalString(args.pageId));
+  const scale = renderScale(args.scale);
+  const background = renderBackground(args.background);
+  const resvg = new Resvg(renderDocumentSvg(page.document, background), {
+    fitTo: { mode: "zoom", value: scale },
+    shapeRendering: 2,
+    textRendering: 2,
+  });
+  const png = resvg.render();
+
+  return mcpImage(png.asPng().toString("base64"), {
+    ok: true,
+    pageId: page.id,
+    revision: context.store.revision(),
+    width: png.width,
+    height: png.height,
+    scale,
+    background,
+  });
 }
 
 function gradientUpsertTool(
@@ -1159,6 +1265,101 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+function renderScale(value: unknown): number {
+  if (value === undefined) {
+    return 1;
+  }
+
+  const scale = requiredNumber(value, "scale");
+
+  if (!Number.isInteger(scale) || scale < 1 || scale > 4) {
+    throw new Error("scale must be an integer from 1 to 4.");
+  }
+
+  return scale;
+}
+
+function renderBackground(value: unknown): "document" | "transparent" {
+  if (value === undefined) {
+    return "document";
+  }
+
+  if (value === "document" || value === "transparent") {
+    return value;
+  }
+
+  throw new Error('background must be "document" or "transparent".');
+}
+
+function renderDocumentSvg(
+  document: GeometryDocument,
+  background: "document" | "transparent",
+): string {
+  const svg = exportToSvg(document);
+
+  if (background === "transparent" || !document.background) {
+    return svg;
+  }
+
+  const viewBox = getDocumentViewBox(document);
+  const backgroundId = "__vibesvg_document_render_background";
+  const backgroundMarkup =
+    document.background.type === "solid"
+      ? `<rect x="${viewBox.x}" y="${viewBox.y}" width="${viewBox.width}" height="${viewBox.height}" fill="${escapeXmlAttribute(document.background.color)}" />`
+      : `<rect x="${viewBox.x}" y="${viewBox.y}" width="${viewBox.width}" height="${viewBox.height}" fill="url(#${backgroundId})" />`;
+  const patternMarkup =
+    document.background.type === "checkerboard"
+      ? checkerboardPattern(document.background, backgroundId)
+      : "";
+  const defsEnd = svg.indexOf("</defs>");
+
+  if (defsEnd < 0) {
+    return svg;
+  }
+
+  return `${svg.slice(0, defsEnd)}${patternMarkup}</defs>${backgroundMarkup}${svg.slice(defsEnd + "</defs>".length)}`;
+}
+
+function checkerboardPattern(
+  background: Extract<
+    NonNullable<GeometryDocument["background"]>,
+    { type: "checkerboard" }
+  >,
+  id: string,
+): string {
+  const size = checkerboardSize(background.size);
+  const fullSize = size * 2;
+  const light = escapeXmlAttribute(background.light ?? "#ffffff");
+  const dark = escapeXmlAttribute(background.dark ?? "#d4d4d4");
+
+  return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${fullSize}" height="${fullSize}"><rect width="100%" height="100%" fill="${light}" /><path d="M 0 0 H ${size} V ${size} H 0 Z M ${size} ${size} H ${fullSize} V ${fullSize} H ${size} Z" fill="${dark}" /></pattern>`;
+}
+
+function checkerboardSize(value: number | undefined): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(1, value)
+    : 16;
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return character;
+    }
+  });
+}
+
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`${name} is required.`);
@@ -1190,6 +1391,16 @@ function requiredIndex(value: unknown, length: number, name: string): number {
     throw new Error(
       `${name} must be an integer from 0 to ${Math.max(0, length - 1)}.`,
     );
+  }
+
+  return index;
+}
+
+function requiredNonNegativeInteger(value: unknown, name: string): number {
+  const index = requiredNumber(value, name);
+
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error(`${name} must be a non-negative integer.`);
   }
 
   return index;
@@ -1227,5 +1438,21 @@ export function mcpText(value: unknown, isError = false) {
       },
     ],
     isError,
+  };
+}
+
+function mcpImage(base64: string, metadata: unknown) {
+  return {
+    content: [
+      {
+        type: "image",
+        data: base64,
+        mimeType: "image/png",
+      },
+      {
+        type: "text",
+        text: JSON.stringify(metadata, null, 2),
+      },
+    ],
   };
 }

@@ -369,7 +369,10 @@ Exposed tools:
 - node_update
 - node_delete
 - node_move
+- node_reorder
+- node_reparent
 - document_update
+- document_render
 - gradient_upsert
 - gradient_delete
 - path_create
@@ -457,6 +460,21 @@ Supported nodes:
 - PolylineNode
 - LineNode
 - TextNode
+
+## Layer Order and Groups
+
+Each `GroupNode.children` array is the painter's order for that group:
+
+- `children[0]` is drawn first and is the back-most sibling.
+- The final child is drawn last and is the front-most sibling.
+- SVG export, Canvas rendering, and hit testing must preserve this rule. Hit testing walks the order in reverse so the front-most matching node wins.
+- The Layer UI displays this order in reverse: the top row is the front-most sibling.
+- Inserting without an `index` appends a node, placing it at the front of its parent group.
+
+Groups occupy one position in their parent's stack; their own children follow the
+same rule. Agents must use `reorder` / `node_reorder` and `reparent` /
+`node_reparent` for stacking changes instead of replacing a group's entire
+`children` array.
 
 ---
 

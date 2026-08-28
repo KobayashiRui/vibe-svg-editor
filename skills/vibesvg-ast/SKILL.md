@@ -24,6 +24,19 @@ Supported node concepts include groups, paths, rectangles, circles, ellipses, po
 
 Path geometry must be normalized into segments. Do not store only raw SVG path strings.
 
+## Layer Order
+
+`GroupNode.children` is an ordered paint stack. `children[0]` is the back-most
+sibling and the final child is the front-most sibling. SVG export and Canvas
+rendering traverse the array in that order; Canvas hit testing traverses it in
+reverse so the front-most matching node is selected.
+
+The Layer UI intentionally displays siblings in reverse, with the front-most
+layer at the top. Inserting a node without an `index` appends it and therefore
+places it at the front. Use the `reorder` and `reparent` patch operations for
+existing nodes; do not rewrite a group's complete `children` array to change
+stacking.
+
 ## Transform
 
 Node transforms are structured AST data, never raw SVG `transform` strings.

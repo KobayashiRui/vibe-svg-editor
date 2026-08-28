@@ -11,7 +11,7 @@ const internalPackageEntries = new Map([
   ["@vibesvg/editor", "packages/editor/src/index.ts"],
   ["@vibesvg/kernel", "packages/kernel/src/index.ts"],
   ["@vibesvg/mcp", "packages/mcp/src/index.ts"],
-  ["@vibesvg/svg", "packages/svg/src/index.ts"]
+  ["@vibesvg/svg", "packages/svg/src/index.ts"],
 ]);
 
 const internalWorkspacePlugin = {
@@ -26,7 +26,7 @@ const internalWorkspacePlugin = {
 
       return { path: resolve(root, entry) };
     });
-  }
+  },
 };
 
 await rm(resolve(root, "apps/cli/dist"), { force: true, recursive: true });
@@ -38,9 +38,10 @@ await build({
   logLevel: "info",
   outfile: cliOutput,
   platform: "node",
+  external: ["@resvg/resvg-js"],
   plugins: [internalWorkspacePlugin],
   sourcemap: true,
-  target: "node18"
+  target: "node18",
 });
 
 await chmod(cliOutput, 0o755);

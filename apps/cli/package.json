@@ -38,6 +38,9 @@
     "dev:icons": "pnpm run build && node dist/index.js host --example vibesvg",
     "prepack": "pnpm -w run build:cli"
   },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  },
   "devDependencies": {
     "@vibesvg/ast": "workspace:*",
     "@vibesvg/mcp": "workspace:*",

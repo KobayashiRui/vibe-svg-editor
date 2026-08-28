@@ -85,6 +85,15 @@ export function applyPatch(
           moveNode(node, patch),
         ) as GroupNode,
       };
+    case "reorder":
+      return reorderNode(document, patch.target, patch.index);
+    case "reparent":
+      return moveNodeToParent(
+        document,
+        patch.target,
+        patch.parentId,
+        patch.index,
+      );
   }
 }
 
@@ -176,6 +185,32 @@ export function reorderChildren(
       };
     }) as GroupNode,
   };
+}
+
+/**
+ * Reorder a node within the child list of its current parent group. Child
+ * index 0 is the back of the SVG/Canvas paint stack; the final index is front.
+ */
+export function reorderNode(
+  document: GeometryDocument,
+  nodeId: string,
+  targetIndex: number,
+): GeometryDocument {
+  if (nodeId === document.root.id) {
+    return document;
+  }
+
+  const parent = findParentNode(document, nodeId);
+
+  if (!parent) {
+    return document;
+  }
+
+  const sourceIndex = parent.children.findIndex((child) => child.id === nodeId);
+
+  return sourceIndex < 0
+    ? document
+    : reorderChildren(document, parent.id, sourceIndex, targetIndex);
 }
 
 export function moveNodeToParent(

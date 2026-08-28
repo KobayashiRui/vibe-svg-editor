@@ -80,7 +80,10 @@ node_insert
 node_update
 node_delete
 node_move
+node_reorder
+node_reparent
 document_update
+document_render
 gradient_upsert
 gradient_delete
 path_create
@@ -99,6 +102,10 @@ project_save
 Use `patch_apply` with `dryRun: true` before risky geometry changes.
 Use `patches_apply` when drawing multiple shapes in one update.
 Use `node_insert`, `node_update`, `node_delete`, and `node_move` for simple create/edit/delete/move operations.
+Use `node_reorder` to change the stack position of an existing node in its current group. Index `0` is back-most; the last index is front-most.
+Use `node_reparent` to move an existing node into another group. Omit `index` to append it at the front of the destination group.
+Read `document_get` before choosing a layer index. The Layer UI is displayed in reverse order, so its top row corresponds to the final child in the AST.
+Use `document_render` after a meaningful visual change. It returns a PNG preview and metadata for the current revision without modifying the project. The default background is the document background; pass `background: "transparent"` when alpha needs to be inspected.
 Use `gradient_upsert` to create or replace a document gradient, then set a node's
 `style.fill` or `style.stroke` to `{ "type": "gradient", "gradientId": "<id>" }`.
 Use `gradient_delete` only after no node refers to that gradient.
@@ -118,8 +125,10 @@ When asked to draw SVG content:
 2. Call `document_get` to read the active document when needed.
 3. Use `document_update` if the requested canvas size differs.
 4. Use `patches_apply` or `node_insert` to add Geometry AST nodes.
-5. Re-read with `document_get`.
-6. Use `svg_export` when the user asks for SVG output.
+5. Use `document_render` to inspect composition, paint, effects, and layer order.
+6. Apply targeted patches for visual corrections, then render again when needed.
+7. Re-read with `document_get`.
+8. Use `svg_export` when the user asks for SVG output.
 
 Example `patches_apply` arguments:
 

@@ -363,6 +363,21 @@ export type MovePatch = {
   dy: number;
 };
 
+/** Reorder one node within its current parent group. Index 0 is the back. */
+export type ReorderPatch = {
+  op: "reorder";
+  target: NodeId;
+  index: number;
+};
+
+/** Move one node to another group. Omitting index appends it to the front. */
+export type ReparentPatch = {
+  op: "reparent";
+  target: NodeId;
+  parentId: NodeId;
+  index?: number;
+};
+
 export type UpdateDocumentPatch = {
   op: "updateDocument";
   changes: Partial<
@@ -388,6 +403,8 @@ export type PatchOperation =
   | UpdatePatch
   | DeletePatch
   | MovePatch
+  | ReorderPatch
+  | ReparentPatch
   | UpdateDocumentPatch
   | GradientUpsertPatch
   | GradientDeletePatch;

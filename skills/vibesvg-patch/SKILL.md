@@ -100,6 +100,36 @@ Resize or rename a document with `updateDocument`.
 }
 ```
 
+## Layer Order
+
+Within a group, `children[0]` is the back-most layer and the final child is the
+front-most layer. New nodes without an `index` are appended to the front.
+
+Reorder an existing node within its current group with `reorder`:
+
+```json
+{
+  "op": "reorder",
+  "target": "highlight",
+  "index": 3
+}
+```
+
+Move an existing node to another group with `reparent`. Omit `index` to append
+it at the front of that group:
+
+```json
+{
+  "op": "reparent",
+  "target": "highlight",
+  "parentId": "badge-group",
+  "index": 0
+}
+```
+
+Read the current document and use its child order when choosing an index. Do
+not update a group's full `children` array merely to change its layer order.
+
 ## Drawing Nodes
 
 Use stable, unique ids. Prefer descriptive ids such as `sun-body`, `badge-shadow`, or `logo-mark-path`.

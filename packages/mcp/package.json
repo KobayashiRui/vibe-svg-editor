@@ -14,6 +14,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@vibesvg/ast": "workspace:*",
     "@vibesvg/kernel": "workspace:*",
     "@vibesvg/svg": "workspace:*"

@@ -13,10 +13,10 @@
   "pages": [
     {
       "id": "page-4",
-      "name": "App Icon",
+      "name": "App Icon — Sculpted V",
       "document": {
         "id": "page-4-document",
-        "name": "App Icon",
+        "name": "App Icon — Sculpted V",
         "width": 24,
         "height": 24,
         "root": {
@@ -25,108 +25,953 @@
           "name": "Root",
           "children": [
             {
-              "id": "app-icon-v-left-highlight",
-              "type": "line",
-              "name": "Dark arm soft highlight",
-              "x1": 5.032,
-              "y1": 5.262,
-              "x2": 11.682,
-              "y2": 17.962,
-              "style": {
-                "fill": "none",
-                "stroke": {
-                  "type": "gradient",
-                  "gradientId": "app-icon-v-left-highlight-stroke-gradient"
+              "id": "group-2",
+              "name": "Group",
+              "type": "group",
+              "children": [
+                {
+                  "id": "v-blue-shadow",
+                  "type": "path",
+                  "name": "Blue arm depth",
+                  "start": {
+                    "x": 15.37,
+                    "y": 4.687
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 15.916,
+                        "y": 3.24
+                      },
+                      "control2": {
+                        "x": 17.532,
+                        "y": 2.508
+                      },
+                      "to": {
+                        "x": 18.979,
+                        "y": 3.054
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 20.426,
+                        "y": 3.6
+                      },
+                      "control2": {
+                        "x": 21.158,
+                        "y": 5.216
+                      },
+                      "to": {
+                        "x": 20.612,
+                        "y": 6.663
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 16.612,
+                        "y": 17.263
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.066,
+                        "y": 18.71
+                      },
+                      "control2": {
+                        "x": 14.45,
+                        "y": 19.442
+                      },
+                      "to": {
+                        "x": 13.003,
+                        "y": 18.896
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 11.556,
+                        "y": 18.35
+                      },
+                      "control2": {
+                        "x": 10.824,
+                        "y": 16.734
+                      },
+                      "to": {
+                        "x": 11.37,
+                        "y": 15.287
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 15.37,
+                        "y": 4.687
+                      }
+                    }
+                  ],
+                  "transform": {
+                    "translateX": 0.04,
+                    "translateY": 0.16
+                  },
+                  "style": {
+                    "fill": "#020817",
+                    "stroke": "none",
+                    "opacity": 0.46,
+                    "effects": [
+                      {
+                        "type": "dropShadow",
+                        "dx": 0.08,
+                        "dy": 0.2,
+                        "blur": 0.32,
+                        "color": "#000000",
+                        "opacity": 0.42
+                      }
+                    ]
+                  }
                 },
-                "strokeWidth": 3.75,
-                "strokeLinecap": "round",
-                "opacity": 0.22,
-                "effects": []
-              }
+                {
+                  "id": "v-blue-body",
+                  "type": "path",
+                  "name": "Blue sculpted arm",
+                  "start": {
+                    "x": 15.37,
+                    "y": 4.687
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 15.916,
+                        "y": 3.24
+                      },
+                      "control2": {
+                        "x": 17.532,
+                        "y": 2.508
+                      },
+                      "to": {
+                        "x": 18.979,
+                        "y": 3.054
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 20.426,
+                        "y": 3.6
+                      },
+                      "control2": {
+                        "x": 21.158,
+                        "y": 5.216
+                      },
+                      "to": {
+                        "x": 20.612,
+                        "y": 6.663
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 16.612,
+                        "y": 17.263
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.066,
+                        "y": 18.71
+                      },
+                      "control2": {
+                        "x": 14.45,
+                        "y": 19.442
+                      },
+                      "to": {
+                        "x": 13.003,
+                        "y": 18.896
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 11.556,
+                        "y": 18.35
+                      },
+                      "control2": {
+                        "x": 10.824,
+                        "y": 16.734
+                      },
+                      "to": {
+                        "x": 11.37,
+                        "y": 15.287
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 15.37,
+                        "y": 4.687
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": {
+                      "type": "gradient",
+                      "gradientId": "v-photo-blue-body"
+                    },
+                    "stroke": "#55dff1",
+                    "strokeWidth": 0.06,
+                    "opacity": 1,
+                    "effects": [
+                      {
+                        "type": "dropShadow",
+                        "dx": 0.06,
+                        "dy": 0.12,
+                        "blur": 0.26,
+                        "color": "#00113b",
+                        "opacity": 0.34
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "v-blue-gloss",
+                  "type": "path",
+                  "name": "Blue face gloss",
+                  "start": {
+                    "x": 15.37,
+                    "y": 4.683
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 15.916,
+                        "y": 3.236
+                      },
+                      "control2": {
+                        "x": 17.532,
+                        "y": 2.504
+                      },
+                      "to": {
+                        "x": 18.979,
+                        "y": 3.05
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 20.426,
+                        "y": 3.596
+                      },
+                      "control2": {
+                        "x": 21.158,
+                        "y": 5.212
+                      },
+                      "to": {
+                        "x": 20.612,
+                        "y": 6.659
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 16.612,
+                        "y": 17.259
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.066,
+                        "y": 18.706
+                      },
+                      "control2": {
+                        "x": 14.45,
+                        "y": 19.438
+                      },
+                      "to": {
+                        "x": 13.003,
+                        "y": 18.892
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 11.556,
+                        "y": 18.346
+                      },
+                      "control2": {
+                        "x": 10.824,
+                        "y": 16.73
+                      },
+                      "to": {
+                        "x": 11.37,
+                        "y": 15.283
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 15.37,
+                        "y": 4.683
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": {
+                      "type": "gradient",
+                      "gradientId": "v-photo-blue-gloss"
+                    },
+                    "stroke": "none",
+                    "opacity": 0.82
+                  }
+                },
+                {
+                  "id": "v-blue-rim",
+                  "type": "path",
+                  "name": "Blue rim light",
+                  "start": {
+                    "x": 15.37,
+                    "y": 4.687
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 15.916,
+                        "y": 3.24
+                      },
+                      "control2": {
+                        "x": 17.532,
+                        "y": 2.508
+                      },
+                      "to": {
+                        "x": 18.979,
+                        "y": 3.054
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 20.426,
+                        "y": 3.6
+                      },
+                      "control2": {
+                        "x": 21.158,
+                        "y": 5.216
+                      },
+                      "to": {
+                        "x": 20.612,
+                        "y": 6.663
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 16.612,
+                        "y": 17.263
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.066,
+                        "y": 18.71
+                      },
+                      "control2": {
+                        "x": 14.45,
+                        "y": 19.442
+                      },
+                      "to": {
+                        "x": 13.003,
+                        "y": 18.896
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 11.556,
+                        "y": 18.35
+                      },
+                      "control2": {
+                        "x": 10.824,
+                        "y": 16.734
+                      },
+                      "to": {
+                        "x": 11.37,
+                        "y": 15.287
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 15.37,
+                        "y": 4.687
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": "none",
+                    "stroke": "#7df5ff",
+                    "strokeWidth": 0.1,
+                    "strokeLinejoin": "round",
+                    "opacity": 0.42
+                  }
+                }
+              ]
             },
             {
-              "id": "app-icon-v-right-highlight",
-              "type": "line",
-              "name": "Primary arm soft highlight",
-              "x1": 11.69,
-              "y1": 17.962,
-              "x2": 18.29,
-              "y2": 5.062,
-              "style": {
-                "fill": "none",
-                "stroke": "#3dbbff",
-                "strokeWidth": 3.75,
-                "strokeLinecap": "round",
-                "opacity": 0.62
-              }
-            },
-            {
-              "id": "app-icon-v-right-shadow",
-              "type": "line",
-              "name": "Primary arm depth shadow",
-              "x1": 12.2,
-              "y1": 18.63,
-              "x2": 18.8,
-              "y2": 5.73,
-              "style": {
-                "fill": "none",
-                "stroke": "#202020",
-                "strokeWidth": 5.35,
-                "strokeLinecap": "round",
-                "opacity": 0.5
-              }
-            },
-            {
-              "id": "app-icon-v-right",
-              "type": "line",
-              "name": "Primary V arm",
-              "x1": 11.9,
-              "y1": 18.25,
-              "x2": 18.5,
-              "y2": 5.35,
-              "style": {
-                "fill": "none",
-                "stroke": "#2f6fed",
-                "strokeWidth": 5.15,
-                "strokeLinecap": "round"
-              },
-              "transform": {
-                "originX": 15.2,
-                "originY": 11.8,
-                "scaleX": 1,
-                "scaleY": 1
-              }
-            },
-            {
-              "id": "app-icon-v-left",
-              "type": "line",
-              "name": "Dark V arm",
-              "x1": 5.25,
-              "y1": 5.55,
-              "x2": 11.9,
-              "y2": 18.25,
-              "style": {
-                "fill": "none",
-                "stroke": "#4a4a4a",
-                "strokeWidth": 5.15,
-                "strokeLinecap": "round"
-              }
-            },
-            {
-              "id": "app-icon-v-left-shadow",
-              "type": "line",
-              "name": "Dark arm depth shadow",
-              "x1": 5.52,
-              "y1": 5.93,
-              "x2": 12.2,
-              "y2": 18.63,
-              "style": {
-                "fill": "none",
-                "stroke": "#202020",
-                "strokeWidth": 5.35,
-                "strokeLinecap": "round",
-                "opacity": 0.5
-              }
+              "id": "group-4",
+              "name": "Group",
+              "type": "group",
+              "children": [
+                {
+                  "id": "v-dark-shadow",
+                  "type": "path",
+                  "name": "Dark arm depth",
+                  "start": {
+                    "x": 2.08,
+                    "y": 7.18
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 1.28,
+                        "y": 5.72
+                      },
+                      "control2": {
+                        "x": 1.82,
+                        "y": 3.94
+                      },
+                      "to": {
+                        "x": 3.27,
+                        "y": 3.15
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 4.72,
+                        "y": 2.36
+                      },
+                      "control2": {
+                        "x": 6.52,
+                        "y": 2.9
+                      },
+                      "to": {
+                        "x": 7.32,
+                        "y": 4.35
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 9.15,
+                        "y": 7.75
+                      },
+                      "control2": {
+                        "x": 11.32,
+                        "y": 11.82
+                      },
+                      "to": {
+                        "x": 13.12,
+                        "y": 15.28
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 14.05,
+                        "y": 17.02
+                      },
+                      "control2": {
+                        "x": 15.35,
+                        "y": 18.25
+                      },
+                      "to": {
+                        "x": 16.62,
+                        "y": 17.22
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.12,
+                        "y": 19.55
+                      },
+                      "control2": {
+                        "x": 14.82,
+                        "y": 21.55
+                      },
+                      "to": {
+                        "x": 12.78,
+                        "y": 22.02
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 10.82,
+                        "y": 22.48
+                      },
+                      "control2": {
+                        "x": 9.18,
+                        "y": 21.08
+                      },
+                      "to": {
+                        "x": 8.36,
+                        "y": 19.34
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 2.08,
+                        "y": 7.18
+                      }
+                    }
+                  ],
+                  "transform": {
+                    "translateX": 0.05,
+                    "translateY": 0.18
+                  },
+                  "style": {
+                    "fill": "#020711",
+                    "stroke": "none",
+                    "opacity": 0.58,
+                    "effects": [
+                      {
+                        "type": "dropShadow",
+                        "dx": 0.1,
+                        "dy": 0.28,
+                        "blur": 0.5,
+                        "color": "#000000",
+                        "opacity": 0.46
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "v-dark-body",
+                  "type": "path",
+                  "name": "Dark sculpted arm",
+                  "start": {
+                    "x": 2.08,
+                    "y": 7.18
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 1.28,
+                        "y": 5.72
+                      },
+                      "control2": {
+                        "x": 1.82,
+                        "y": 3.94
+                      },
+                      "to": {
+                        "x": 3.27,
+                        "y": 3.15
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 4.72,
+                        "y": 2.36
+                      },
+                      "control2": {
+                        "x": 6.52,
+                        "y": 2.9
+                      },
+                      "to": {
+                        "x": 7.32,
+                        "y": 4.35
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 9.15,
+                        "y": 7.75
+                      },
+                      "control2": {
+                        "x": 11.32,
+                        "y": 11.82
+                      },
+                      "to": {
+                        "x": 13.12,
+                        "y": 15.28
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 14.05,
+                        "y": 17.02
+                      },
+                      "control2": {
+                        "x": 15.35,
+                        "y": 18.25
+                      },
+                      "to": {
+                        "x": 16.62,
+                        "y": 17.22
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.12,
+                        "y": 19.55
+                      },
+                      "control2": {
+                        "x": 14.82,
+                        "y": 21.55
+                      },
+                      "to": {
+                        "x": 12.78,
+                        "y": 22.02
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 10.82,
+                        "y": 22.48
+                      },
+                      "control2": {
+                        "x": 9.18,
+                        "y": 21.08
+                      },
+                      "to": {
+                        "x": 8.36,
+                        "y": 19.34
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 2.08,
+                        "y": 7.18
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": {
+                      "type": "gradient",
+                      "gradientId": "v-photo-dark-body"
+                    },
+                    "stroke": "#78869d",
+                    "strokeWidth": 0.06,
+                    "opacity": 1,
+                    "effects": [
+                      {
+                        "type": "dropShadow",
+                        "dx": 0.08,
+                        "dy": 0.16,
+                        "blur": 0.32,
+                        "color": "#000000",
+                        "opacity": 0.38
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "v-dark-gloss",
+                  "type": "path",
+                  "name": "Dark face gloss",
+                  "start": {
+                    "x": 2.08,
+                    "y": 7.18
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 1.28,
+                        "y": 5.72
+                      },
+                      "control2": {
+                        "x": 1.82,
+                        "y": 3.94
+                      },
+                      "to": {
+                        "x": 3.27,
+                        "y": 3.15
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 4.72,
+                        "y": 2.36
+                      },
+                      "control2": {
+                        "x": 6.52,
+                        "y": 2.9
+                      },
+                      "to": {
+                        "x": 7.32,
+                        "y": 4.35
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 9.15,
+                        "y": 7.75
+                      },
+                      "control2": {
+                        "x": 11.32,
+                        "y": 11.82
+                      },
+                      "to": {
+                        "x": 13.12,
+                        "y": 15.28
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 14.05,
+                        "y": 17.02
+                      },
+                      "control2": {
+                        "x": 15.35,
+                        "y": 18.25
+                      },
+                      "to": {
+                        "x": 16.62,
+                        "y": 17.22
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.12,
+                        "y": 19.55
+                      },
+                      "control2": {
+                        "x": 14.82,
+                        "y": 21.55
+                      },
+                      "to": {
+                        "x": 12.78,
+                        "y": 22.02
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 10.82,
+                        "y": 22.48
+                      },
+                      "control2": {
+                        "x": 9.18,
+                        "y": 21.08
+                      },
+                      "to": {
+                        "x": 8.36,
+                        "y": 19.34
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 2.08,
+                        "y": 7.18
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": {
+                      "type": "gradient",
+                      "gradientId": "v-photo-dark-gloss"
+                    },
+                    "stroke": "none",
+                    "opacity": 0.76
+                  }
+                },
+                {
+                  "id": "v-dark-rim",
+                  "type": "path",
+                  "name": "Dark rim light",
+                  "start": {
+                    "x": 2.08,
+                    "y": 7.18
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 1.28,
+                        "y": 5.72
+                      },
+                      "control2": {
+                        "x": 1.82,
+                        "y": 3.94
+                      },
+                      "to": {
+                        "x": 3.27,
+                        "y": 3.15
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 4.72,
+                        "y": 2.36
+                      },
+                      "control2": {
+                        "x": 6.52,
+                        "y": 2.9
+                      },
+                      "to": {
+                        "x": 7.32,
+                        "y": 4.35
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 9.15,
+                        "y": 7.75
+                      },
+                      "control2": {
+                        "x": 11.32,
+                        "y": 11.82
+                      },
+                      "to": {
+                        "x": 13.12,
+                        "y": 15.28
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 14.05,
+                        "y": 17.02
+                      },
+                      "control2": {
+                        "x": 15.35,
+                        "y": 18.25
+                      },
+                      "to": {
+                        "x": 16.62,
+                        "y": 17.22
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.12,
+                        "y": 19.55
+                      },
+                      "control2": {
+                        "x": 14.82,
+                        "y": 21.55
+                      },
+                      "to": {
+                        "x": 12.78,
+                        "y": 22.02
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 10.82,
+                        "y": 22.48
+                      },
+                      "control2": {
+                        "x": 9.18,
+                        "y": 21.08
+                      },
+                      "to": {
+                        "x": 8.36,
+                        "y": 19.34
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 2.08,
+                        "y": 7.18
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": "none",
+                    "stroke": "#aebdd3",
+                    "strokeWidth": 0.1,
+                    "strokeLinejoin": "round",
+                    "opacity": 0.28
+                  }
+                },
+                {
+                  "id": "v-dark-edge-glint",
+                  "type": "path",
+                  "name": "Dark upper edge glint",
+                  "start": {
+                    "x": 2.3,
+                    "y": 6.88
+                  },
+                  "closed": false,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 1.7,
+                        "y": 5.62
+                      },
+                      "control2": {
+                        "x": 2.16,
+                        "y": 4.18
+                      },
+                      "to": {
+                        "x": 3.46,
+                        "y": 3.48
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 4.75,
+                        "y": 2.78
+                      },
+                      "control2": {
+                        "x": 6.25,
+                        "y": 3.2
+                      },
+                      "to": {
+                        "x": 6.98,
+                        "y": 4.48
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": "none",
+                    "stroke": "#d9e4f5",
+                    "strokeWidth": 0.12,
+                    "strokeLinecap": "round",
+                    "opacity": 0.28
+                  }
+                }
+              ]
             }
           ]
         },
@@ -169,6 +1014,164 @@
                 {
                   "offset": 1,
                   "color": "#2563ff"
+                }
+              ]
+            },
+            {
+              "id": "app-icon-v-left-gradient",
+              "type": "linear",
+              "x1": 4.5,
+              "y1": 4.5,
+              "x2": 12.8,
+              "y2": 19,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#69758b"
+                },
+                {
+                  "offset": 0.42,
+                  "color": "#343d4e"
+                },
+                {
+                  "offset": 1,
+                  "color": "#090f1b"
+                }
+              ]
+            },
+            {
+              "id": "app-icon-v-right-gradient",
+              "type": "linear",
+              "x1": 11,
+              "y1": 19,
+              "x2": 19,
+              "y2": 4.5,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#0633f6"
+                },
+                {
+                  "offset": 0.52,
+                  "color": "#087aff"
+                },
+                {
+                  "offset": 1,
+                  "color": "#1dc8f5"
+                }
+              ]
+            },
+            {
+              "id": "v-photo-blue-body",
+              "type": "linear",
+              "x1": 12.2,
+              "y1": 18.8,
+              "x2": 19.2,
+              "y2": 3,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#0824e8"
+                },
+                {
+                  "offset": 0.48,
+                  "color": "#075eff"
+                },
+                {
+                  "offset": 0.78,
+                  "color": "#079cf5"
+                },
+                {
+                  "offset": 1,
+                  "color": "#21d8ef"
+                }
+              ]
+            },
+            {
+              "id": "v-photo-blue-gloss",
+              "type": "radial",
+              "cx": 15.7,
+              "cy": 3.3,
+              "r": 15.5,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#b8ffff",
+                  "opacity": 0.38
+                },
+                {
+                  "offset": 0.25,
+                  "color": "#45e7ff",
+                  "opacity": 0.2
+                },
+                {
+                  "offset": 0.62,
+                  "color": "#1686ff",
+                  "opacity": 0.04
+                },
+                {
+                  "offset": 1,
+                  "color": "#0b35ff",
+                  "opacity": 0
+                }
+              ]
+            },
+            {
+              "id": "v-photo-dark-body",
+              "type": "linear",
+              "x1": 4.1,
+              "y1": 2.7,
+              "x2": 13.5,
+              "y2": 21,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#77849b"
+                },
+                {
+                  "offset": 0.18,
+                  "color": "#58657b"
+                },
+                {
+                  "offset": 0.48,
+                  "color": "#303a4c"
+                },
+                {
+                  "offset": 0.78,
+                  "color": "#141c2a"
+                },
+                {
+                  "offset": 1,
+                  "color": "#080f1a"
+                }
+              ]
+            },
+            {
+              "id": "v-photo-dark-gloss",
+              "type": "radial",
+              "cx": 4.5,
+              "cy": 2.8,
+              "r": 16.8,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#e1ebff",
+                  "opacity": 0.24
+                },
+                {
+                  "offset": 0.3,
+                  "color": "#9fb2d0",
+                  "opacity": 0.11
+                },
+                {
+                  "offset": 0.68,
+                  "color": "#2a3548",
+                  "opacity": 0.02
+                },
+                {
+                  "offset": 1,
+                  "color": "#0a101a",
+                  "opacity": 0
                 }
               ]
             }
@@ -1370,5 +2373,5 @@
     }
   ],
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-08-28T04:24:18.261Z"
+  "updatedAt": "2026-08-28T05:05:42.972Z"
 }
