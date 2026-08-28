@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/KobayashiRui/vibe-svg-editor/main/docs/images/app-icon.svg" alt="VibeSVG" width="72" height="72" />
+  <img src="https://raw.githubusercontent.com/KobayashiRui/vibe-svg-editor/main/docs/images/app-icon.svg" alt="VibeSVG" width="144" height="144" />
 </p>
 
 <h1 align="center">VibeSVG</h1>
