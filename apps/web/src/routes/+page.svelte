@@ -1418,6 +1418,8 @@
 			case 'update':
 				return hasGeometryChanges(patch.changes) ? [patch.target] : [];
 			case 'delete':
+			case 'reorder':
+			case 'reparent':
 			case 'updateDocument':
 			case 'gradientUpsert':
 			case 'gradientDelete':
