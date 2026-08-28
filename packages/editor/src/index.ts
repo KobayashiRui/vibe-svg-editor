@@ -50,6 +50,8 @@ export type ViewportSize = {
 export type RenderOptions = {
   selectedNodeIds?: NodeId[];
   background?: string;
+  /** Leave the canvas transparent so the host application can provide an editor board. */
+  transparentBackground?: boolean;
   pixelRatio?: number;
   showEditHandles?: boolean;
 };
@@ -362,8 +364,10 @@ export function renderDocument(
   context.save();
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   context.clearRect(0, 0, width, height);
-  context.fillStyle = options.background ?? "#f8fafc";
-  context.fillRect(0, 0, width, height);
+  if (!options.transparentBackground) {
+    context.fillStyle = options.background ?? "#f8fafc";
+    context.fillRect(0, 0, width, height);
+  }
   context.restore();
 
   context.save();

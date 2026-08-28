@@ -129,11 +129,10 @@
 	type ShapeTool = 'rect' | 'ellipse' | 'triangle';
 
 	const uiColors = {
-		primary: '#4f8ef7',
-		primaryHover: '#6ea4ff',
-		primaryPreviewFill: 'rgba(79, 142, 247, 0.08)',
-		warning: '#facc15',
-		workbench: '#383838'
+		primary: '#4b7dff',
+		primaryHover: '#6a95ff',
+		primaryPreviewFill: 'rgba(75, 125, 255, 0.08)',
+		warning: '#facc15'
 	} as const;
 
 	const pageBackgroundColorFallbacks = {
@@ -961,6 +960,10 @@
 		}
 
 		viewport = zoomViewportAtPoint(viewport, canvasCenterPoint(), value / 100);
+	}
+
+	function adjustZoom(multiplier: number) {
+		viewport = zoomViewportAtPoint(viewport, canvasCenterPoint(), viewport.zoom * multiplier);
 	}
 
 	function fitCanvasToDocument() {
@@ -3156,7 +3159,7 @@
 
 		renderDocument(context, geometryDocument, viewport, {
 			selectedNodeIds,
-			background: uiColors.workbench,
+			transparentBackground: true,
 			pixelRatio: canvasPixelRatio,
 			showEditHandles: selectedNodeIds.length > 0
 		});
@@ -3649,57 +3652,60 @@
 
 <div class="app-shell">
 	<header class="topbar">
-		<div class="topbar-brand">
-			<img alt="" aria-hidden="true" class="brand-mark" src={iconPaths.app} />
-		</div>
+		<div class="topbar-project-group">
+			<div class="topbar-brand">
+				<img alt="" aria-hidden="true" class="brand-mark" src={iconPaths.app} />
+			</div>
 
-		<div class="history-controls" aria-label="History">
-			<button
-				aria-label="Undo"
-				title="Undo"
-				type="button"
-				onclick={undo}
-				disabled={undoStack.length === 0}
-			>
-				<img alt="" aria-hidden="true" src={iconPaths.undo} />
-			</button>
-			<button
-				aria-label="Redo"
-				title="Redo"
-				type="button"
-				onclick={redo}
-				disabled={redoStack.length === 0}
-			>
-				<img alt="" aria-hidden="true" src={iconPaths.redo} />
-			</button>
-		</div>
-
-		<div class="project-name-shell">
-			{#if renamingProjectName}
-				<input
-					bind:this={projectNameInput}
-					class="project-name-input"
-					type="text"
-					value={projectNameDraft}
-					oninput={(event) => (projectNameDraft = event.currentTarget.value)}
-					onblur={confirmProjectNameRename}
-					onkeydown={handleProjectNameKeyDown}
-				/>
-			{:else}
+			<div class="history-controls" aria-label="History">
 				<button
-					aria-label="Rename project"
-					class="project-name-display"
-					title="Rename project"
+					aria-label="Undo"
+					title="Undo"
 					type="button"
-					onclick={startProjectNameRename}
+					onclick={undo}
+					disabled={undoStack.length === 0}
 				>
-					<h1>{project.name}</h1>
-					<img alt="" aria-hidden="true" src={iconPaths.edit} />
+					<img alt="" aria-hidden="true" src={iconPaths.undo} />
 				</button>
-			{/if}
+				<button
+					aria-label="Redo"
+					title="Redo"
+					type="button"
+					onclick={redo}
+					disabled={redoStack.length === 0}
+				>
+					<img alt="" aria-hidden="true" src={iconPaths.redo} />
+				</button>
+			</div>
+
+			<div class="project-name-shell">
+				{#if renamingProjectName}
+					<input
+						bind:this={projectNameInput}
+						class="project-name-input"
+						type="text"
+						value={projectNameDraft}
+						oninput={(event) => (projectNameDraft = event.currentTarget.value)}
+						onblur={confirmProjectNameRename}
+						onkeydown={handleProjectNameKeyDown}
+					/>
+				{:else}
+					<button
+						aria-label="Rename project"
+						class="project-name-display"
+						title="Rename project"
+						type="button"
+						onclick={startProjectNameRename}
+					>
+						<h1>{project.name}</h1>
+						<img alt="" aria-hidden="true" src={iconPaths.edit} />
+					</button>
+				{/if}
+			</div>
 		</div>
 
-		<div class="topbar-status">
+		<div class="topbar-actions-group">
+			<div class="topbar-status">
 			<div class="export-menu">
 				<input
 					bind:this={svgImportInput}
@@ -3769,7 +3775,8 @@
 				{/if}
 			</div>
 			<button type="button" onclick={downloadProject}>Export Project</button>
-			<button type="button" onclick={openProjectSettings}>Settings</button>
+				<button type="button" onclick={openProjectSettings}>Settings</button>
+			</div>
 		</div>
 	</header>
 
@@ -3924,6 +3931,25 @@
 					>
 						<img alt="" aria-hidden="true" src={iconPaths.basis} />
 					</button>
+				</div>
+				<div class="zoom-control" aria-label="Canvas zoom">
+					<button aria-label="Zoom out" title="Zoom out" type="button" onclick={() => adjustZoom(1 / 1.2)}
+						>−</button
+					>
+					<input
+						aria-label="Zoom percentage"
+						min="10"
+						max="6400"
+						step="1"
+						type="number"
+						value={Math.round(viewport.zoom * 100)}
+						onchange={updateZoomPercent}
+					/>
+					<span>%</span>
+					<button aria-label="Zoom in" title="Zoom in" type="button" onclick={() => adjustZoom(1.2)}
+						>+</button
+					>
+					<button class="zoom-fit-button" type="button" onclick={fitCanvasToDocument}>Fit</button>
 				</div>
 				<canvas
 					class:panning
@@ -4125,8 +4151,34 @@
 			{/if}
 		</div>
 
-		<aside class="inspector">
-			<details class="inspector-section" open>
+		<aside
+			class="inspector"
+			class:selectionActive={selectedNodeIds.length === 1}
+			class:multiSelection={selectedNodeIds.length > 1}
+		>
+			<div class="inspector-header">
+				<div>
+					<span class="inspector-eyebrow">Inspector</span>
+					<strong>
+						{selectedNodeIds.length > 1
+							? `${selectedNodeIds.length} selected`
+							: selectedNode
+								? selectedNode.name || selectedNode.type
+								: activePage.name || 'Document'}
+					</strong>
+				</div>
+				{#if selectedNode && selectedNodeIds.length === 1}
+					<span class="inspector-node-type">{selectedNode.type}</span>
+				{/if}
+			</div>
+
+			{#if selectedNodeIds.length > 1}
+				<div class="multi-selection-summary">
+					Select a single layer to edit its appearance, transform, and geometry.
+				</div>
+			{/if}
+
+			<details class="inspector-section document-section" open>
 				<summary>
 					<span>Page Settings</span>
 					<svg
@@ -4186,8 +4238,12 @@
 						/>
 						<span>px</span>
 					</div>
+				</div>
 
-					<label for="document-viewbox-x">ViewBox X</label>
+				<details class="document-advanced">
+					<summary>Advanced</summary>
+					<div class="field-grid">
+						<label for="document-viewbox-x">ViewBox X</label>
 					<div class="number-field">
 						<input
 							id="document-viewbox-x"
@@ -4232,10 +4288,11 @@
 							onchange={(event) => updateDocumentViewBox('height', event)}
 						/>
 					</div>
-				</div>
+					</div>
+				</details>
 			</details>
 
-			<details class="inspector-section" open>
+			<details class="inspector-section selection-section">
 				<summary>
 					<span>Composition</span>
 					<svg
@@ -4299,7 +4356,7 @@
 				{/if}
 			</details>
 
-			<details class="inspector-section" open>
+			<details class="inspector-section selection-section" open>
 				<summary>
 					<span>Transform</span>
 					<svg
@@ -4411,7 +4468,11 @@
 				{/if}
 			</details>
 
-			<details class="inspector-section" open>
+			<details
+				class="inspector-section selection-section text-section"
+				class:textUnavailable={selectedNode?.type !== 'text'}
+				open
+			>
 				<summary>
 					<span>Text</span>
 					<svg
@@ -4510,7 +4571,7 @@
 				{/if}
 			</details>
 
-			<details class="inspector-section" open>
+			<details class="inspector-section document-section" open>
 				<summary>
 					<span>Page Background</span>
 					<svg
@@ -4548,62 +4609,10 @@
 				</div>
 			</details>
 
-			<details class="inspector-section" open>
-				<summary>
-					<span>Zoom Settings</span>
-					<svg
-						aria-hidden="true"
-						class="section-chevron"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-						stroke-width="1.5"
-					>
-						<path
-							class="section-chevron-closed"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="m8.25 4.5 7.5 7.5-7.5 7.5"
-						/>
-						<path
-							class="section-chevron-open"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="m19.5 8.25-7.5 7.5-7.5-7.5"
-						/>
-					</svg>
-				</summary>
-				<div class="field-grid compact">
-					<label for="zoom-percent">Scale</label>
-					<div class="zoom-row">
-						<div class="number-field">
-							<input
-								id="zoom-percent"
-								min="10"
-								max="6400"
-								step="1"
-								type="number"
-								value={Math.round(viewport.zoom * 100)}
-								onchange={updateZoomPercent}
-							/>
-							<span>%</span>
-						</div>
-						<button
-							class="secondary-button fit-button"
-							type="button"
-							title="Actual Size"
-							onclick={setActualSizeZoom}
-						>
-							100%
-						</button>
-						<button class="secondary-button fit-button" type="button" onclick={fitCanvasToDocument}
-							>Fit</button
-						>
-					</div>
-				</div>
-			</details>
-
-			<details class="inspector-section" open>
+			<details
+				class="inspector-section selection-section geometry-section"
+				class:geometryUnavailable={selectedNode?.type === 'group'}
+			>
 				<summary>
 					<span>Geometry</span>
 					<svg
@@ -4844,7 +4853,7 @@
 				{/if}
 			</details>
 
-			<details class="inspector-section" open>
+			<details class="inspector-section selection-section" open>
 				<summary>
 					<span>Appearance</span>
 					<svg

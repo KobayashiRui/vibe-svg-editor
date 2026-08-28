@@ -1,39 +1,39 @@
 @import 'tailwindcss';
 
 @theme {
-	--color-gs-bg: #202020;
-	--color-gs-chrome: #2b2b2b;
-	--color-gs-panel: #303030;
-	--color-gs-control: #383838;
-	--color-gs-control-hover: #444444;
-	--color-gs-workbench: #383838;
-	--color-gs-input: #2a2a2a;
-	--color-gs-thumb: #242424;
+	--color-gs-bg: #1c1c1a;
+	--color-gs-chrome: #17191d;
+	--color-gs-panel: #1c1f24;
+	--color-gs-control: #24272d;
+	--color-gs-control-hover: #30343b;
+	--color-gs-workbench: #292824;
+	--color-gs-input: #131518;
+	--color-gs-thumb: #171816;
 
-	--color-gs-border: #4a4a4a;
-	--color-gs-border-muted: #3f3f3f;
+	--color-gs-border: #3b3d40;
+	--color-gs-border-muted: #2d2f32;
 
-	--color-gs-text: #f2f2f2;
-	--color-gs-text-muted: #b0b0b0;
-	--color-gs-text-subtle: #8a8a8a;
+	--color-gs-text: #f1f0ec;
+	--color-gs-text-muted: #bbb9b2;
+	--color-gs-text-subtle: #85847e;
 	--color-gs-text-inverse: #ffffff;
 
-	--color-gs-primary: #4f8ef7;
-	--color-gs-primary-hover: #6ea4ff;
-	--color-gs-primary-active: #2f6fed;
-	--color-gs-primary-soft: #243a5f;
-	--color-gs-primary-glow: rgb(79 142 247 / 24%);
+	--color-gs-primary: #4b7dff;
+	--color-gs-primary-hover: #6a95ff;
+	--color-gs-primary-active: #3767db;
+	--color-gs-primary-soft: #29385d;
+	--color-gs-primary-glow: rgb(75 125 255 / 24%);
 
 	--color-gs-success: #5eead4;
 	--color-gs-warning: #facc15;
 	--color-gs-danger: #ef4444;
 	--color-gs-danger-text: #fca5a5;
 	--color-gs-danger-soft: #3a2024;
-	--color-gs-overlay: rgb(32 32 32 / 88%);
+	--color-gs-overlay: rgb(24 24 22 / 88%);
 
-	--color-gs-page-white: #ffffff;
-	--color-gs-page-gray: #A0A0A0;
+	--color-gs-page-white: #f7f5f0;
+	--color-gs-page-gray: #9d9b94;
 	--color-gs-page-black: #000000;
-	--color-gs-page-alpha-light: #fafafa;
-	--color-gs-page-alpha-dark: #B0B0B0;
+	--color-gs-page-alpha-light: #f4f1ea;
+	--color-gs-page-alpha-dark: #b3aea2;
 }
