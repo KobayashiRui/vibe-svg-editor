@@ -1,30 +1,30 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/KobayashiRui/GlyphSmith/main/docs/images/app-icon.svg" alt="GlyphSmith" width="72" height="72" />
+  <img src="https://raw.githubusercontent.com/KobayashiRui/vibe-svg-editor/main/docs/images/app-icon.svg" alt="VibeSVG" width="72" height="72" />
 </p>
 
-<h1 align="center">GlyphSmith</h1>
+<h1 align="center">VibeSVG</h1>
 
 <p align="center">
   Geometry AST と patch-based editing で動く、agent-native な SVG エディタ。
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/glyphsmith"><img src="https://img.shields.io/npm/v/glyphsmith?style=flat-square" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/glyphsmith"><img src="https://img.shields.io/npm/dm/glyphsmith?style=flat-square" alt="npm downloads" /></a>
-  <a href="https://github.com/KobayashiRui/GlyphSmith/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/glyphsmith?style=flat-square" alt="license" /></a>
-  <img src="https://img.shields.io/node/v/glyphsmith?style=flat-square" alt="node version" />
+  <a href="https://www.npmjs.com/package/vibesvg"><img src="https://img.shields.io/npm/v/vibesvg?style=flat-square" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/vibesvg"><img src="https://img.shields.io/npm/dm/vibesvg?style=flat-square" alt="npm downloads" /></a>
+  <a href="https://github.com/KobayashiRui/vibe-svg-editor/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/vibesvg?style=flat-square" alt="license" /></a>
+  <img src="https://img.shields.io/node/v/vibesvg?style=flat-square" alt="node version" />
   <img src="https://img.shields.io/badge/pnpm-9.0.0-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm 9.0.0" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/KobayashiRui/GlyphSmith/blob/main/README.md">English</a> | 日本語
+  <a href="https://github.com/KobayashiRui/vibe-svg-editor/blob/main/README.md">English</a> | 日本語
 </p>
 
-GlyphSmith は、手作業での編集と AI エージェントによる編集の両方を前提にした SVG エディタです。
+VibeSVG は、手作業での編集と AI エージェントによる編集の両方を前提にした SVG エディタです。
 エージェントに SVG 文字列全体を書き換えさせるのではなく、SVG を Geometry AST に import し、
 対象を絞った patch operation を適用し、境界部分でだけ SVG として export します。
 
-![GlyphSmith editor](https://raw.githubusercontent.com/KobayashiRui/GlyphSmith/main/docs/images/editor.png)
+![VibeSVG editor](https://raw.githubusercontent.com/KobayashiRui/vibe-svg-editor/main/docs/images/editor.png)
 
 ```txt
 SVG
@@ -38,37 +38,45 @@ SVG
 
 ## Demo
 
-![GlyphSmith demo](https://raw.githubusercontent.com/KobayashiRui/GlyphSmith/main/docs/images/glyphsmith-demo.gif)
+![VibeSVG demo](https://raw.githubusercontent.com/KobayashiRui/vibe-svg-editor/main/docs/images/vibesvg-demo.gif)
 
 ## Status
 
-GlyphSmith は開発初期段階です。現在のリリースは CLI-first で、ローカルの editor session、project file、SVG export、MCP ベースの agent workflow にフォーカスしています。
+VibeSVG は開発初期段階です。現在のリリースは CLI-first で、ローカルの editor session、project file、SVG export、MCP ベースの agent workflow にフォーカスしています。
+
+## SVG Feature Support
+
+VibeSVG は編集可能な SVG の概念を構造化された Geometry AST として保持し、SVG XML は import / export 境界で生成・解析します。
+
+現時点では、geometry node と正規化された path、solid fill / stroke、linear / radial gradient、translate / rotate / scale transform、geometry node を参照する clip path と alpha mask、blur / drop shadow をサポートしています。
+
+次の優先事項は、inner shadow、blend mode、追加の high-level effect、pattern paint / marker、再利用可能な symbol / instance、rich text run、外部 SVG の transform / filter / mask 構文との互換性強化です。Boolean Union / Subtract は、通常の SVG path の import・編集には不要な geometry authoring 操作のため、意図的に後回しにしています。
 
 ## Quick Start
 
-GlyphSmith をインストールします。
+VibeSVG をインストールします。
 
 ```sh
-npm install -g glyphsmith
+npm install -g vibesvg
 ```
 
 新規プロジェクトを開始します。
 
 ```sh
-glyphsmith my-logo
+vibesvg my-logo
 ```
 
-これは `./my-logo.gs.json` を開きます。ファイルが存在しない場合、GlyphSmith が自動で作成します。
+これは `./my-logo.vsvg.json` を開きます。ファイルが存在しない場合、VibeSVG が自動で作成します。
 
 global install せずに実行することもできます。
 
 ```sh
-npx glyphsmith my-logo
+npx vibesvg my-logo
 ```
 
 ## Agent Workflow
 
-GlyphSmith では Geometry AST が source of truth です。AI エージェントは SVG ファイル全体を再生成するのではなく、patch operation または MCP tool を通じて project を変更します。
+VibeSVG では Geometry AST が source of truth です。AI エージェントは SVG ファイル全体を再生成するのではなく、patch operation または MCP tool を通じて project を変更します。
 
 デフォルトのローカル MCP endpoint:
 
@@ -79,34 +87,34 @@ http://127.0.0.1:6202/mcp
 ローカル MCP endpoint を登録します。
 
 ```sh
-glyphsmith mcp install codex --url http://127.0.0.1:6202/mcp
-glyphsmith mcp install claude --url http://127.0.0.1:6202/mcp
+vibesvg mcp install codex --url http://127.0.0.1:6202/mcp
+vibesvg mcp install claude --url http://127.0.0.1:6202/mcp
 ```
 
-GlyphSmith skill をインストールします。
+VibeSVG skill をインストールします。
 
 ```sh
-glyphsmith skills install codex
-glyphsmith skills install claude
+vibesvg skills install codex
+vibesvg skills install claude
 ```
 
 ## Project Files
 
-GlyphSmith の project file は `.gs.json` 拡張子を使い、複数ページを含められます。1ページは1つの SVG-equivalent な Geometry AST document に対応します。
+VibeSVG の project file は `.vsvg.json` 拡張子を使い、複数ページを含められます。1ページは1つの SVG-equivalent な Geometry AST document に対応します。
 
 Examples:
 
 ```txt
-examples/playground.gs.json
-examples/glyphsmith.gs.json
+examples/playground.vsvg.json
+examples/vibesvg.vsvg.json
 ```
 
 CLI の path resolution は決定的です。
 
 ```txt
-glyphsmith              -> ./glyphsmith.gs.json
-glyphsmith logo         -> ./logo.gs.json
-glyphsmith logo.gs.json -> ./logo.gs.json
+vibesvg              -> ./vibesvg.vsvg.json
+vibesvg logo         -> ./logo.vsvg.json
+vibesvg logo.vsvg.json -> ./logo.vsvg.json
 ```
 
 解決された project file が存在しない場合、CLI はそのファイルを作成して処理を続行します。
@@ -134,7 +142,7 @@ README 用の画像は `docs/images` に置きます。アプリ実行時の ass
 
 ```txt
 docs/images/app-icon.svg
-docs/images/glyphsmith-demo.gif
+docs/images/vibesvg-demo.gif
 docs/images/editor.png
 ```
 
@@ -146,7 +154,7 @@ docs/images/editor.png
 pnpm install
 ```
 
-このリポジトリから GlyphSmith を実行します。
+このリポジトリから VibeSVG を実行します。
 
 ```sh
 pnpm run build:cli
@@ -162,13 +170,13 @@ pnpm run dev
 開発時のデフォルト:
 
 ```txt
-Project: examples/playground.gs.json
+Project: examples/playground.vsvg.json
 UI:      http://localhost:6201
 Host:    ws://localhost:6202/ws
 MCP:     http://localhost:6202/mcp
 ```
 
-公式 GlyphSmith icon project を起動します。
+公式 VibeSVG icon project を起動します。
 
 ```sh
 pnpm run dev:icons
@@ -204,4 +212,4 @@ pnpm run build:cli
 pnpm run pack:cli
 ```
 
-package は `artifacts/npm` に出力され、bundle 済み CLI、build 済み web UI、GlyphSmith skills を含みます。
+package は `artifacts/npm` に出力され、bundle 済み CLI、build 済み web UI、VibeSVG skills を含みます。

@@ -1,13 +1,13 @@
 {
-  "name": "glyph-smith",
+  "name": "vibe-svg-editor",
   "private": true,
   "license": "MIT",
   "scripts": {
     "build": "turbo run build",
-    "build:cli": "turbo run build --filter=web && node scripts/copy-web-to-cli.mjs && turbo run build --filter=glyphsmith",
-    "dev": "turbo run dev --filter=web --filter=glyphsmith",
-    "dev:icons": "turbo run dev:icons --filter=web --filter=glyphsmith",
-    "export:icons": "pnpm --filter glyphsmith run build && node apps/cli/dist/index.js export --example glyphsmith --out apps/web/static/icons --clean",
+    "build:cli": "turbo run build --filter=web && node scripts/copy-web-to-cli.mjs && turbo run build --filter=vibesvg",
+    "dev": "turbo run dev --filter=web --filter=vibesvg",
+    "dev:icons": "turbo run dev:icons --filter=web --filter=vibesvg",
+    "export:icons": "pnpm --filter vibesvg run build && node apps/cli/dist/index.js export --example vibesvg --out apps/web/static/icons --clean",
     "pack:cli": "pnpm --dir apps/cli pack --pack-destination ../../artifacts/npm",
     "publish:check": "pnpm run check-types && pnpm --filter web run check && pnpm run pack:cli",
     "publish:npm": "pnpm run publish:check && npm publish ./apps/cli",

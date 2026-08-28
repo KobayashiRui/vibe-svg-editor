@@ -7,9 +7,9 @@ import { homedir } from "node:os";
 import { createServer as createNetServer } from "node:net";
 import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isGlyphSmithProject, type GlyphSmithProject } from "@glyphsmith/ast";
-import { mcpTools } from "@glyphsmith/mcp";
-import { exportToSvg } from "@glyphsmith/svg";
+import { isVibeSVGProject, type VibeSVGProject } from "@vibesvg/ast";
+import { mcpTools } from "@vibesvg/mcp";
+import { exportToSvg } from "@vibesvg/svg";
 import { ProjectStore } from "./project-store.js";
 import { startHostServer } from "./server.js";
 
@@ -145,9 +145,9 @@ async function main(): Promise<void> {
     cwd: resolve(cliDirectory, "../../.."),
     env: {
       ...process.env,
-      GLYPHSMITH_HOST_WS_URL: `ws://${DEFAULT_HOST}:${hostPort}/ws`,
-      VITE_GLYPHSMITH_HOST_WS_URL: `ws://${DEFAULT_HOST}:${hostPort}/ws`,
-      GLYPHSMITH_PROJECT_FILE: projectFile,
+      VIBESVG_HOST_WS_URL: `ws://${DEFAULT_HOST}:${hostPort}/ws`,
+      VITE_VIBESVG_HOST_WS_URL: `ws://${DEFAULT_HOST}:${hostPort}/ws`,
+      VIBESVG_PROJECT_FILE: projectFile,
       PORT: port
     },
     stdio: "inherit"
@@ -232,21 +232,21 @@ function resolveProjectFile(options: Pick<CliOptions, "example" | "projectFile">
     return resolveExampleProjectFile(options.example);
   }
 
-  const rawPath = options.projectFile ?? "glyphsmith.gs.json";
+  const rawPath = options.projectFile ?? "vibesvg.vsvg.json";
   const trimmedPath = rawPath.replace(/[\\/]+$/, "");
-  const filePath = /\.gs\.json$/i.test(trimmedPath) ? trimmedPath : `${trimmedPath}.gs.json`;
+  const filePath = /\.vsvg\.json$/i.test(trimmedPath) ? trimmedPath : `${trimmedPath}.vsvg.json`;
 
   return resolve(process.cwd(), filePath);
 }
 
 function resolveExampleProjectFile(exampleName: string): string {
-  const normalizedName = exampleName.trim().replace(/\.gs\.json$/i, "");
+  const normalizedName = exampleName.trim().replace(/\.vsvg\.json$/i, "");
 
   if (!/^[\w-]+$/.test(normalizedName)) {
     throw new Error(`Invalid example name: ${exampleName}`);
   }
 
-  return resolve(cliDirectory, "../../..", "examples", `${normalizedName}.gs.json`);
+  return resolve(cliDirectory, "../../..", "examples", `${normalizedName}.vsvg.json`);
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -427,22 +427,22 @@ function parseExportArgs(args: string[]): ExportOptions {
   return options;
 }
 
-async function readProject(projectFile: string): Promise<GlyphSmithProject> {
+async function readProject(projectFile: string): Promise<VibeSVGProject> {
   const project = JSON.parse(await readFile(projectFile, "utf8")) as unknown;
 
-  if (!isGlyphSmithProject(project)) {
-    throw new Error(`Invalid GlyphSmith project: ${projectFile}`);
+  if (!isVibeSVGProject(project)) {
+    throw new Error(`Invalid VibeSVG project: ${projectFile}`);
   }
 
   return project;
 }
 
 function projectFileStem(projectFile: string): string {
-  return basename(projectFile).replace(/\.gs\.json$/i, "") || "glyphsmith-project";
+  return basename(projectFile).replace(/\.vsvg\.json$/i, "") || "vibesvg-project";
 }
 
 function fileSafeName(value: string): string {
-  return value.trim().replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "glyphsmith";
+  return value.trim().replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "vibesvg";
 }
 
 function uniqueExportFilename(basename: string, usedNames: Map<string, number>): string {
@@ -457,7 +457,7 @@ async function handleMcpCommand(args: string[]): Promise<void> {
 
   if (!action || action === "-h" || action === "--help") {
     console.log(`Usage:
-  glyphsmith mcp install <codex|claude> --url <mcp-url> [--project <project-dir>]`);
+  vibesvg mcp install <codex|claude> --url <mcp-url> [--project <project-dir>]`);
     return;
   }
 
@@ -468,23 +468,23 @@ async function handleMcpCommand(args: string[]): Promise<void> {
   const url = optionValue(args, "--url");
 
   if (!url) {
-    throw new Error("Missing MCP URL. Usage: glyphsmith mcp install <codex|claude> --url <mcp-url>");
+    throw new Error("Missing MCP URL. Usage: vibesvg mcp install <codex|claude> --url <mcp-url>");
   }
 
   if (target === "codex") {
     const path = await installCodexMcpConfig(url);
-    console.log(`Codex MCP configured for GlyphSmith (${path})`);
+    console.log(`Codex MCP configured for VibeSVG (${path})`);
     return;
   }
 
   if (target === "claude") {
     const projectPath = optionValue(args, "--project");
     const path = await installClaudeMcpConfig(url, projectPath ? resolve(process.cwd(), projectPath) : undefined);
-    console.log(`Claude Code MCP configured for GlyphSmith (${path})`);
+    console.log(`Claude Code MCP configured for VibeSVG (${path})`);
     return;
   }
 
-  throw new Error("Missing MCP target. Usage: glyphsmith mcp install <codex|claude> --url <mcp-url>");
+  throw new Error("Missing MCP target. Usage: vibesvg mcp install <codex|claude> --url <mcp-url>");
 }
 
 async function handleSkillsCommand(args: string[]): Promise<void> {
@@ -492,7 +492,7 @@ async function handleSkillsCommand(args: string[]): Promise<void> {
 
   if (!action || action === "-h" || action === "--help") {
     console.log(`Usage:
-  glyphsmith skills install <codex|claude> [--project <project-dir>] [--dest <skills-dir>] [--force]`);
+  vibesvg skills install <codex|claude> [--project <project-dir>] [--dest <skills-dir>] [--force]`);
     return;
   }
 
@@ -510,17 +510,17 @@ async function handleSkillsCommand(args: string[]): Promise<void> {
   const installedSummary = result.installed.length ? result.installed.join(", ") : "none";
   const skippedSummary = result.skipped.length ? `; skipped existing: ${result.skipped.join(", ")}` : "";
 
-  console.log(`GlyphSmith skills installed for ${target} (${destination})`);
+  console.log(`VibeSVG skills installed for ${target} (${destination})`);
   console.log(`Installed: ${installedSummary}${skippedSummary}`);
 
   if (result.skipped.length) {
-    console.log("Use --force to replace existing GlyphSmith skills.");
+    console.log("Use --force to replace existing VibeSVG skills.");
   }
 }
 
 function resolveSkillsDestination(target: string | undefined, options: { dest?: string; project?: string }): string {
   if (target !== "codex" && target !== "claude") {
-    throw new Error("Missing skills target. Usage: glyphsmith skills install <codex|claude>");
+    throw new Error("Missing skills target. Usage: vibesvg skills install <codex|claude>");
   }
 
   if (options.dest) {
@@ -539,7 +539,7 @@ function resolveSkillsDestination(target: string | undefined, options: { dest?: 
     return resolve(process.env.CLAUDE_HOME || resolve(homedir(), ".claude"), "skills");
   }
 
-  throw new Error("Missing skills target. Usage: glyphsmith skills install <codex|claude>");
+  throw new Error("Missing skills target. Usage: vibesvg skills install <codex|claude>");
 }
 
 async function resolveSkillsSource(): Promise<string> {
@@ -555,7 +555,7 @@ async function resolveSkillsSource(): Promise<string> {
     }
   }
 
-  throw new Error("GlyphSmith skills directory was not found.");
+  throw new Error("VibeSVG skills directory was not found.");
 }
 
 async function installSkills(source: string, destination: string, force: boolean): Promise<{ installed: string[]; skipped: string[] }> {
@@ -624,22 +624,22 @@ function optionValue(args: string[], name: string): string | undefined {
 
 async function installCodexMcpConfig(url: string): Promise<string> {
   if (commandHelpIncludes("codex", ["mcp", "add", "--help"], "--url")) {
-    commandOutputIgnored("codex", ["mcp", "remove", "glyphsmith"]);
-    commandOutput("codex", ["mcp", "add", "glyphsmith", "--url", url]);
+    commandOutputIgnored("codex", ["mcp", "remove", "vibesvg"]);
+    commandOutput("codex", ["mcp", "add", "vibesvg", "--url", url]);
   }
 
   const path = resolve(process.env.CODEX_HOME || resolve(homedir(), ".codex"), "config.toml");
   const content = await readOptionalTextFile(path);
   let nextContent = upsertTomlTable(
     content,
-    "mcp_servers.glyphsmith",
+    "mcp_servers.vibesvg",
     `enabled = true\nurl = ${JSON.stringify(url)}`
   );
 
   for (const tool of mcpTools()) {
     nextContent = upsertTomlTable(
       nextContent,
-      `mcp_servers.glyphsmith.tools.${tool.name}`,
+      `mcp_servers.vibesvg.tools.${tool.name}`,
       `approval_mode = "approve"`
     );
   }
@@ -653,8 +653,8 @@ async function installClaudeMcpConfig(url: string, projectPath?: string): Promis
     commandHelpIncludes("claude", ["mcp", "add", "--help"], "--transport") &&
     commandHelpIncludes("claude", ["mcp", "add", "--help"], "--scope")
   ) {
-    commandOutputIgnored("claude", ["mcp", "remove", "--scope", "user", "glyphsmith"]);
-    commandOutput("claude", ["mcp", "add", "--scope", "user", "--transport", "http", "glyphsmith", url]);
+    commandOutputIgnored("claude", ["mcp", "remove", "--scope", "user", "vibesvg"]);
+    commandOutput("claude", ["mcp", "add", "--scope", "user", "--transport", "http", "vibesvg", url]);
     return "Claude Code user scope";
   }
 
@@ -671,7 +671,7 @@ async function installClaudeMcpConfig(url: string, projectPath?: string): Promis
     ? existingServers as Record<string, unknown>
     : {};
 
-  servers.glyphsmith = { url };
+  servers.vibesvg = { url };
   nextRoot.mcpServers = servers;
   await writeTextFile(path, `${JSON.stringify(nextRoot, null, 2)}\n`);
   return path;
@@ -777,42 +777,42 @@ function parsePort(value: string): string {
 }
 
 function printHelp(): void {
-  console.log(`GlyphSmith
+  console.log(`VibeSVG
 
 Usage:
-  glyphsmith [project]
-  glyphsmith host [project]
-  glyphsmith host --example <name>
-  glyphsmith init [project]
-  glyphsmith export [project] [--out <dir>] [--clean]
-  glyphsmith export --example <name> [--out <dir>] [--clean]
-  glyphsmith mcp install <codex|claude> --url <mcp-url> [--project <project-dir>]
-  glyphsmith skills install <codex|claude> [--project <project-dir>] [--force]
+  vibesvg [project]
+  vibesvg host [project]
+  vibesvg host --example <name>
+  vibesvg init [project]
+  vibesvg export [project] [--out <dir>] [--clean]
+  vibesvg export --example <name> [--out <dir>] [--clean]
+  vibesvg mcp install <codex|claude> --url <mcp-url> [--project <project-dir>]
+  vibesvg skills install <codex|claude> [--project <project-dir>] [--force]
 
-Project paths may omit .gs.json:
-  glyphsmith logo       -> logo.gs.json
-  glyphsmith logo.gs.json
+Project paths may omit .vsvg.json:
+  vibesvg logo       -> logo.vsvg.json
+  vibesvg logo.vsvg.json
 
 Options:
   --port <port>     Web UI port for open mode. Host/MCP port for host mode.
                     Defaults to ${DEFAULT_PORT} for open mode and ${DEFAULT_HOST_PORT} for host mode.
-  --example <name>  Use examples/<name>.gs.json.
+  --example <name>  Use examples/<name>.vsvg.json.
 
 Explicit --port values are always treated as fixed ports.
 `);
 }
 
 function printExportHelp(): void {
-  console.log(`GlyphSmith SVG Export
+  console.log(`VibeSVG SVG Export
 
 Usage:
-  glyphsmith export [project] [--out <dir>] [--clean]
-  glyphsmith export --example <name> [--out <dir>] [--clean]
+  vibesvg export [project] [--out <dir>] [--clean]
+  vibesvg export --example <name> [--out <dir>] [--clean]
 
 Options:
   --out <dir>      Output directory. Defaults to <project-stem>-svg.
   --clean          Remove the output directory before writing SVG files.
-  --example <name> Export examples/<name>.gs.json.
+  --example <name> Export examples/<name>.vsvg.json.
 `);
 }
 

@@ -3,18 +3,23 @@
 		createPage,
 		createProject,
 		getDocumentViewBox,
+		type Gradient,
+		type GradientStop,
+		type Effect,
 		type DocumentBackground,
 		type GeometryDocument,
 		type GeometryNode,
-		type GlyphSmithProject,
+		type VibeSVGProject,
 		type NodeId,
 		type NodeStyle,
+		type NodeTransform,
+		type Paint,
 		type PathNode,
 		type Point,
 		type Segment,
 		type TextNode,
 		type ViewBox
-	} from '@glyphsmith/ast';
+	} from '@vibesvg/ast';
 	import {
 		createAppendPathSegmentPatch,
 		createBasisSplinePathGeometry,
@@ -29,6 +34,7 @@
 		coordinateDecimalPlaces,
 		drawArcSegment,
 		fitViewportToDocument,
+		getNodeBounds,
 		getPathEndTangent,
 		hitTest,
 		hitTestEditHandle,
@@ -44,17 +50,18 @@
 		type SnapPoint,
 		type Tool,
 		type Viewport
-	} from '@glyphsmith/editor';
+	} from '@vibesvg/editor';
 	import {
 		applyPatch,
+		applyPatches,
 		findNode,
 		findParentNode,
 		groupNodes,
 		moveNodeToParent,
 		reorderChildren,
 		ungroupNode
-	} from '@glyphsmith/kernel';
-	import { exportToSvg, importFromSvg } from '@glyphsmith/svg';
+	} from '@vibesvg/kernel';
+	import { exportToSvg, importFromSvg } from '@vibesvg/svg';
 	import { DragDropProvider, type DragDropEventHandlers } from '@dnd-kit/svelte';
 	import { isSortable } from '@dnd-kit/svelte/sortable';
 	import { strToU8, zipSync } from 'fflate';
@@ -66,11 +73,12 @@
 	let canvas: HTMLCanvasElement;
 	let svgImportInput = $state<HTMLInputElement | undefined>();
 	let context = $state<CanvasRenderingContext2D | undefined>();
-	let project = $state<GlyphSmithProject>(initialProjectFromData());
+	let project = $state<VibeSVGProject>(initialProjectFromData());
 	let selectedNodeIds = $state<NodeId[]>([]);
 	let tool = $state<Tool>('select');
 	let pathSegmentMode = $state<PathSegmentMode>('line');
 	let activePathNodeId = $state<NodeId | undefined>();
+	let isTransformScaleLocked = $state(true);
 	let viewport = $state<Viewport>({ x: 80, y: 56, zoom: 1 });
 	let draftStart = $state<Point | undefined>();
 	let draftEnd = $state<Point | undefined>();
@@ -84,13 +92,13 @@
 	let nextNodeIndex = $state(1);
 	let canvasPixelRatio = $state(1);
 	let snapTarget = $state<SnapPoint | undefined>();
-	let undoStack = $state<GlyphSmithProject[]>([]);
-	let redoStack = $state<GlyphSmithProject[]>([]);
+	let undoStack = $state<VibeSVGProject[]>([]);
+	let redoStack = $state<VibeSVGProject[]>([]);
 	let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>(initialSaveStatusFromData());
 	let hostStatus = $state<'disabled' | 'connecting' | 'connected' | 'error'>('disabled');
-	let liveEditStartProject: GlyphSmithProject | undefined;
+	let liveEditStartProject: VibeSVGProject | undefined;
 	let liveEditDidChange = false;
-	let settingsEditStartProject: GlyphSmithProject | undefined;
+	let settingsEditStartProject: VibeSVGProject | undefined;
 	let hostSocket: WebSocket | undefined;
 	let hostSyncTimer: ReturnType<typeof setTimeout> | undefined;
 	let hostReconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -102,7 +110,7 @@
 	let svgExportOpen = $state(false);
 	let editingGroupId = $state<NodeId | undefined>();
 	let expandedGroupIds = $state<NodeId[]>([]);
-	let layerDragStartProject: GlyphSmithProject | undefined;
+	let layerDragStartProject: VibeSVGProject | undefined;
 	let layerDragNodeId = $state<NodeId | undefined>();
 	let layerContextMenu = $state<{ nodeId?: NodeId; x: number; y: number } | undefined>();
 	let pageContextMenu = $state<{ pageId: string; x: number; y: number } | undefined>();
@@ -184,10 +192,16 @@
 	const selectedNode = $derived(
 		selectedNodeIds[0] ? findNode(geometryDocument, selectedNodeIds[0]) : undefined
 	);
+	const clipPathCandidates = $derived(
+		selectedNode ? collectClipPathCandidates(geometryDocument.root, selectedNode.id) : []
+	);
+	const maskCandidates = $derived(
+		selectedNode ? collectMaskCandidates(geometryDocument.root, selectedNode.id) : []
+	);
 
-	function initialProjectFromData(): GlyphSmithProject {
+	function initialProjectFromData(): VibeSVGProject {
 		return createProject({
-			name: 'GlyphSmith Project',
+			name: 'VibeSVG Project',
 			width: 256,
 			height: 256
 		});
@@ -233,6 +247,59 @@
 		}
 
 		return items;
+	}
+
+	function collectClipPathCandidates(
+		node: Extract<GeometryNode, { type: 'group' }>,
+		excludedNodeId: NodeId
+	): Array<{ id: NodeId; name: string; type: string }> {
+		const candidates: Array<{ id: NodeId; name: string; type: string }> = [];
+
+		for (const child of node.children) {
+			if (
+				child.id !== excludedNodeId &&
+				(child.type === 'rect' ||
+					child.type === 'circle' ||
+					child.type === 'ellipse' ||
+					child.type === 'polygon' ||
+					(child.type === 'path' && child.closed))
+			) {
+				candidates.push({
+					id: child.id,
+					name: child.name ?? child.id,
+					type: child.type
+				});
+			}
+
+			if (child.type === 'group') {
+				candidates.push(...collectClipPathCandidates(child, excludedNodeId));
+			}
+		}
+
+		return candidates;
+	}
+
+	function collectMaskCandidates(
+		node: Extract<GeometryNode, { type: 'group' }>,
+		excludedNodeId: NodeId
+	): Array<{ id: NodeId; name: string; type: string }> {
+		const candidates: Array<{ id: NodeId; name: string; type: string }> = [];
+
+		for (const child of node.children) {
+			if (child.id !== excludedNodeId) {
+				candidates.push({
+					id: child.id,
+					name: child.name ?? child.id,
+					type: child.type
+				});
+			}
+
+			if (child.type === 'group') {
+				candidates.push(...collectMaskCandidates(child, excludedNodeId));
+			}
+		}
+
+		return candidates;
 	}
 
 	function isHiddenByLayerDrag(item: LayerItem) {
@@ -1352,6 +1419,8 @@
 				return hasGeometryChanges(patch.changes) ? [patch.target] : [];
 			case 'delete':
 			case 'updateDocument':
+			case 'gradientUpsert':
+			case 'gradientDelete':
 				return [];
 		}
 	}
@@ -1381,7 +1450,9 @@
 		);
 	}
 
-	function updatePatchChangesNode(patch: Extract<Parameters<typeof applyPatch>[1], { op: 'update' }>) {
+	function updatePatchChangesNode(
+		patch: Extract<Parameters<typeof applyPatch>[1], { op: 'update' }>
+	) {
 		const node = findNode(geometryDocument, patch.target);
 
 		if (!node) {
@@ -1390,9 +1461,7 @@
 
 		const currentValues = node as unknown as Record<string, unknown>;
 
-		return Object.entries(patch.changes).some(
-			([field, value]) => currentValues[field] !== value
-		);
+		return Object.entries(patch.changes).some(([field, value]) => currentValues[field] !== value);
 	}
 
 	function undo() {
@@ -2072,6 +2141,175 @@
 		return `page-${index}`;
 	}
 
+	type PaintField = 'fill' | 'stroke';
+	type PaintMode = 'solid' | 'linear' | 'radial' | 'none';
+
+	function selectedPaint(field: PaintField): Paint | undefined {
+		if (!selectedNode) {
+			return undefined;
+		}
+
+		return (
+			selectedNode.style?.[field] ??
+			(selectedNode.type === 'text' ? selectedNode[field] : undefined)
+		);
+	}
+
+	function selectedGradient(field: PaintField): Gradient | undefined {
+		const paint = selectedPaint(field);
+
+		return typeof paint === 'object'
+			? geometryDocument.resources?.gradients.find((gradient) => gradient.id === paint.gradientId)
+			: undefined;
+	}
+
+	function paintMode(field: PaintField): PaintMode {
+		const paint = selectedPaint(field);
+
+		if (paint === 'none') {
+			return 'none';
+		}
+
+		if (typeof paint === 'object') {
+			return selectedGradient(field)?.type ?? 'solid';
+		}
+
+		return 'solid';
+	}
+
+	function updateSelectedPaint(field: PaintField, paint: Paint) {
+		if (!selectedNode) {
+			return;
+		}
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: {
+				style: { ...selectedNode.style, [field]: paint }
+			} as Partial<GeometryNode>
+		});
+	}
+
+	function setPaintMode(field: PaintField, mode: PaintMode) {
+		if (mode === 'linear' || mode === 'radial') {
+			applyGradientToSelected(field, mode);
+			return;
+		}
+
+		if (mode === 'none') {
+			updateSelectedPaint(field, 'none');
+			return;
+		}
+
+		const gradient = selectedGradient(field);
+		updateSelectedPaint(field, gradient?.stops[0]?.color ?? '#2563ff');
+	}
+
+	function updateGradient(gradient: Gradient) {
+		commitPatch({ op: 'gradientUpsert', gradient });
+	}
+
+	function updateGradientStop(gradient: Gradient, index: number, changes: Partial<GradientStop>) {
+		updateGradient({
+			...gradient,
+			stops: gradient.stops.map((stop, stopIndex) =>
+				stopIndex === index ? { ...stop, ...changes } : stop
+			)
+		});
+	}
+
+	function updateGradientStopOffset(gradient: Gradient, index: number, rawValue: string) {
+		const value = Number(rawValue);
+
+		if (!Number.isFinite(value)) {
+			return;
+		}
+
+		updateGradientStop(gradient, index, { offset: Math.max(0, Math.min(1, value / 100)) });
+	}
+
+	function updateGradientStopOpacity(gradient: Gradient, index: number, rawValue: string) {
+		const value = Number(rawValue);
+
+		if (!Number.isFinite(value)) {
+			return;
+		}
+
+		updateGradientStop(gradient, index, { opacity: Math.max(0, Math.min(1, value / 100)) });
+	}
+
+	function addGradientStop(gradient: Gradient) {
+		const orderedStops = [...gradient.stops].sort((left, right) => left.offset - right.offset);
+		let largestGap = {
+			start: orderedStops[0]?.offset ?? 0,
+			end: orderedStops[1]?.offset ?? 1,
+			color: orderedStops[0]?.color ?? '#2563ff',
+			opacity: orderedStops[0]?.opacity ?? 1
+		};
+
+		for (let index = 0; index < orderedStops.length - 1; index += 1) {
+			const start = orderedStops[index]!;
+			const end = orderedStops[index + 1]!;
+
+			if (end.offset - start.offset > largestGap.end - largestGap.start) {
+				largestGap = {
+					start: start.offset,
+					end: end.offset,
+					color: start.color,
+					opacity: start.opacity ?? 1
+				};
+			}
+		}
+
+		updateGradient({
+			...gradient,
+			stops: [
+				...gradient.stops,
+				{
+					offset: (largestGap.start + largestGap.end) / 2,
+					color: largestGap.color,
+					opacity: largestGap.opacity
+				}
+			].sort((left, right) => left.offset - right.offset)
+		});
+	}
+
+	function removeGradientStop(gradient: Gradient, index: number) {
+		if (gradient.stops.length <= 2) {
+			return;
+		}
+
+		updateGradient({
+			...gradient,
+			stops: gradient.stops.filter((_, stopIndex) => stopIndex !== index)
+		});
+	}
+
+	function updateGradientCoordinate(
+		gradient: Gradient,
+		coordinate: 'x1' | 'y1' | 'x2' | 'y2' | 'cx' | 'cy' | 'r',
+		rawValue: string
+	) {
+		const value = Number(rawValue);
+
+		if (!Number.isFinite(value) || (coordinate === 'r' && value <= 0)) {
+			return;
+		}
+
+		updateGradient({ ...gradient, [coordinate]: value } as Gradient);
+	}
+
+	function gradientPreviewStyle(gradient: Gradient): string {
+		const stops = gradient.stops
+			.map((stop) => `${stop.color} ${Math.round(stop.offset * 100)}%`)
+			.join(', ');
+
+		return gradient.type === 'linear'
+			? `linear-gradient(135deg, ${stops})`
+			: `radial-gradient(circle, ${stops})`;
+	}
+
 	function updateSelectedStyle(field: keyof NodeStyle, rawValue: string) {
 		if (!selectedNode) {
 			return;
@@ -2099,6 +2337,299 @@
 					...selectedNode.style,
 					[field]: value
 				}
+			} as Partial<GeometryNode>
+		});
+	}
+
+	function applyGradientToSelected(field: PaintField, type: Gradient['type']) {
+		if (!selectedNode) {
+			return;
+		}
+
+		const viewBox = getDocumentViewBox(geometryDocument);
+		const id = `${selectedNode.id}-${field}-gradient`;
+		const gradient: Gradient =
+			type === 'linear'
+				? {
+						id,
+						type: 'linear',
+						x1: viewBox.x,
+						y1: viewBox.y,
+						x2: viewBox.x + viewBox.width,
+						y2: viewBox.y + viewBox.height,
+						stops: [
+							{ offset: 0, color: '#3dbbff' },
+							{ offset: 1, color: '#2563ff' }
+						]
+					}
+				: {
+						id,
+						type: 'radial',
+						cx: viewBox.x + viewBox.width / 2,
+						cy: viewBox.y + viewBox.height / 2,
+						r: Math.max(viewBox.width, viewBox.height) / 2,
+						stops: [
+							{ offset: 0, color: '#3dbbff' },
+							{ offset: 1, color: '#2563ff' }
+						]
+					};
+
+		undoStack = [...undoStack, cloneProject(project)];
+		redoStack = [];
+		updateActiveDocument(
+			applyPatches(geometryDocument, [
+				{ op: 'gradientUpsert', gradient },
+				{
+					op: 'update',
+					target: selectedNode.id,
+					changes: {
+						style: { ...selectedNode.style, [field]: { type: 'gradient', gradientId: id } }
+					} as Partial<GeometryNode>
+				}
+			])
+		);
+	}
+
+	function toggleSelectedEffect(type: Effect['type']) {
+		if (!selectedNode) {
+			return;
+		}
+
+		const effects = selectedNode.style?.effects ?? [];
+		const nextEffects = effects.some((effect) => effect.type === type)
+			? effects.filter((effect) => effect.type !== type)
+			: [
+					...effects,
+					type === 'blur'
+						? { type: 'blur', radius: 6 }
+						: { type: 'dropShadow', dx: 0, dy: 8, blur: 12, color: '#000000', opacity: 0.32 }
+				];
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: {
+				style: { ...selectedNode.style, effects: nextEffects }
+			} as Partial<GeometryNode>
+		});
+	}
+
+	function selectedBlurEffect(): Extract<Effect, { type: 'blur' }> | undefined {
+		return selectedNode?.style?.effects?.find(
+			(effect): effect is Extract<Effect, { type: 'blur' }> => effect.type === 'blur'
+		);
+	}
+
+	function selectedDropShadowEffect(): Extract<Effect, { type: 'dropShadow' }> | undefined {
+		return selectedNode?.style?.effects?.find(
+			(effect): effect is Extract<Effect, { type: 'dropShadow' }> => effect.type === 'dropShadow'
+		);
+	}
+
+	function updateSelectedBlurRadius(rawValue: string) {
+		const radius = Number(rawValue);
+		const effect = selectedBlurEffect();
+
+		if (!selectedNode || !effect || !Number.isFinite(radius)) {
+			return;
+		}
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: {
+				style: {
+					...selectedNode.style,
+					effects: selectedNode.style?.effects?.map((currentEffect) =>
+						currentEffect.type === 'blur'
+							? { ...currentEffect, radius: Math.max(0, radius) }
+							: currentEffect
+					)
+				}
+			} as Partial<GeometryNode>
+		});
+	}
+
+	function updateSelectedDropShadowNumber(field: 'dx' | 'dy' | 'blur', rawValue: string) {
+		const value = Number(rawValue);
+		const effect = selectedDropShadowEffect();
+
+		if (!selectedNode || !effect || !Number.isFinite(value)) {
+			return;
+		}
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: {
+				style: {
+					...selectedNode.style,
+					effects: selectedNode.style?.effects?.map((currentEffect) =>
+						currentEffect.type === 'dropShadow'
+							? { ...currentEffect, [field]: field === 'blur' ? Math.max(0, value) : value }
+							: currentEffect
+					)
+				}
+			} as Partial<GeometryNode>
+		});
+	}
+
+	function updateSelectedDropShadowColor(color: string) {
+		const effect = selectedDropShadowEffect();
+
+		if (!selectedNode || !effect) {
+			return;
+		}
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: {
+				style: {
+					...selectedNode.style,
+					effects: selectedNode.style?.effects?.map((currentEffect) =>
+						currentEffect.type === 'dropShadow' ? { ...currentEffect, color } : currentEffect
+					)
+				}
+			} as Partial<GeometryNode>
+		});
+	}
+
+	function updateSelectedDropShadowOpacity(rawValue: string) {
+		const opacity = Number(rawValue);
+		const effect = selectedDropShadowEffect();
+
+		if (!selectedNode || !effect || !Number.isFinite(opacity)) {
+			return;
+		}
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: {
+				style: {
+					...selectedNode.style,
+					effects: selectedNode.style?.effects?.map((currentEffect) =>
+						currentEffect.type === 'dropShadow'
+							? { ...currentEffect, opacity: Math.max(0, Math.min(1, opacity / 100)) }
+							: currentEffect
+					)
+				}
+			} as Partial<GeometryNode>
+		});
+	}
+
+	type TransformNumberField = 'translateX' | 'translateY' | 'rotation' | 'scaleX' | 'scaleY';
+
+	function selectedTransformValue(field: TransformNumberField): number {
+		const fallback = field === 'scaleX' || field === 'scaleY' ? 1 : 0;
+		return selectedNode?.transform?.[field] ?? fallback;
+	}
+
+	function transformOrigin(node: GeometryNode): Pick<NodeTransform, 'originX' | 'originY'> {
+		if (node.transform?.originX !== undefined && node.transform.originY !== undefined) {
+			return { originX: node.transform.originX, originY: node.transform.originY };
+		}
+
+		const bounds = getNodeBounds(geometryDocument, node.id);
+
+		return {
+			originX: bounds ? bounds.x + bounds.width / 2 : 0,
+			originY: bounds ? bounds.y + bounds.height / 2 : 0
+		};
+	}
+
+	function updateSelectedTransform(changes: Partial<NodeTransform>) {
+		if (!selectedNode) {
+			return;
+		}
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: {
+				transform: {
+					...transformOrigin(selectedNode),
+					...selectedNode.transform,
+					...changes
+				}
+			} as Partial<GeometryNode>
+		});
+	}
+
+	function updateSelectedTransformNumber(field: TransformNumberField, rawValue: string) {
+		const value = Number(rawValue);
+
+		if (!Number.isFinite(value)) {
+			return;
+		}
+
+		updateSelectedTransform({
+			[field]: field === 'scaleX' || field === 'scaleY' ? Math.max(0.01, value) : value
+		});
+	}
+
+	function updateSelectedTransformScale(field: 'scaleX' | 'scaleY', rawValue: string) {
+		const value = Number(rawValue);
+
+		if (!Number.isFinite(value)) {
+			return;
+		}
+
+		const nextValue = Math.max(0.01, value);
+
+		if (!isTransformScaleLocked) {
+			updateSelectedTransform({ [field]: nextValue });
+			return;
+		}
+
+		const otherField = field === 'scaleX' ? 'scaleY' : 'scaleX';
+		const currentValue = selectedTransformValue(field);
+		const currentOtherValue = selectedTransformValue(otherField);
+		const ratio = currentValue === 0 ? 1 : currentOtherValue / currentValue;
+
+		updateSelectedTransform({
+			[field]: nextValue,
+			[otherField]: Math.max(0.01, nextValue * ratio)
+		});
+	}
+
+	function resetSelectedTransform() {
+		if (!selectedNode?.transform) {
+			return;
+		}
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: { transform: undefined } as Partial<GeometryNode>
+		});
+	}
+
+	function updateSelectedClipPath(nodeId: string) {
+		if (!selectedNode || nodeId === selectedNode.id) {
+			return;
+		}
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: {
+				clipPath: nodeId ? { nodeId } : undefined
+			} as Partial<GeometryNode>
+		});
+	}
+
+	function updateSelectedMask(nodeId: string) {
+		if (!selectedNode || nodeId === selectedNode.id) {
+			return;
+		}
+
+		commitPatch({
+			op: 'update',
+			target: selectedNode.id,
+			changes: {
+				mask: nodeId ? { nodeId } : undefined
 			} as Partial<GeometryNode>
 		});
 	}
@@ -2278,8 +2809,16 @@
 		});
 	}
 
-	function colorPickerValue(value: string | undefined, fallback: string): string {
-		return /^#[\da-f]{6}$/i.test(value ?? '') ? (value as string) : fallback;
+	function colorPickerValue(value: Paint | undefined, fallback: string): string {
+		return typeof value === 'string' && /^#[\da-f]{6}$/i.test(value) ? value : fallback;
+	}
+
+	function paintFieldValue(value: Paint | undefined, fallback: string): string {
+		if (!value) {
+			return fallback;
+		}
+
+		return typeof value === 'string' ? value : `Gradient: ${value.gradientId}`;
 	}
 
 	function exportSvgPages(pageIds: string[]) {
@@ -2301,7 +2840,7 @@
 			return;
 		}
 
-		const projectSlug = fileSafeName(project.name || 'glyphsmith-project');
+		const projectSlug = fileSafeName(project.name || 'vibesvg-project');
 		const usedNames = new Map<string, number>();
 		const entries: Record<string, Uint8Array> = {};
 
@@ -2335,7 +2874,7 @@
 		const snapshot = cloneProject(project);
 		downloadTextFile(
 			JSON.stringify(snapshot, null, 2),
-			`${fileSafeName(project.name || 'glyphsmith')}.gs.json`,
+			`${fileSafeName(project.name || 'vibesvg')}.vsvg.json`,
 			'application/json'
 		);
 	}
@@ -2345,7 +2884,7 @@
 			value
 				.trim()
 				.replace(/[^a-z0-9-_]+/gi, '-')
-				.replace(/^-+|-+$/g, '') || 'glyphsmith'
+				.replace(/^-+|-+$/g, '') || 'vibesvg'
 		);
 	}
 
@@ -2428,8 +2967,8 @@
 			return undefined;
 		}
 
-		if (import.meta.env.VITE_GLYPHSMITH_HOST_WS_URL) {
-			return import.meta.env.VITE_GLYPHSMITH_HOST_WS_URL;
+		if (import.meta.env.VITE_VIBESVG_HOST_WS_URL) {
+			return import.meta.env.VITE_VIBESVG_HOST_WS_URL;
 		}
 
 		if (import.meta.env.DEV) {
@@ -2469,7 +3008,7 @@
 
 	function isHostMessage(
 		message: unknown
-	): message is { type: 'project:ack' } | { type: 'project:snapshot'; project: GlyphSmithProject } {
+	): message is { type: 'project:ack' } | { type: 'project:snapshot'; project: VibeSVGProject } {
 		return Boolean(
 			message &&
 			typeof message === 'object' &&
@@ -2481,7 +3020,7 @@
 		);
 	}
 
-	function isProjectLike(value: unknown): value is GlyphSmithProject {
+	function isProjectLike(value: unknown): value is VibeSVGProject {
 		return Boolean(
 			value &&
 			typeof value === 'object' &&
@@ -2492,8 +3031,8 @@
 		);
 	}
 
-	function applyRemoteProject(nextProject: GlyphSmithProject) {
-		project = structuredClone(nextProject) as GlyphSmithProject;
+	function applyRemoteProject(nextProject: VibeSVGProject) {
+		project = structuredClone(nextProject) as VibeSVGProject;
 		nextNodeIndex = Math.max(nextNodeIndex, nextNodeIndexFromProject(project));
 		undoStack = [];
 		redoStack = [];
@@ -2553,11 +3092,11 @@
 		);
 	}
 
-	function projectsEqual(left: GlyphSmithProject, right: GlyphSmithProject) {
+	function projectsEqual(left: VibeSVGProject, right: VibeSVGProject) {
 		return JSON.stringify($state.snapshot(left)) === JSON.stringify(right);
 	}
 
-	function nextNodeIndexFromProject(sourceProject: GlyphSmithProject) {
+	function nextNodeIndexFromProject(sourceProject: VibeSVGProject) {
 		let maxIndex = 0;
 
 		for (const page of sourceProject.pages) {
@@ -2587,8 +3126,8 @@
 		return structuredClone($state.snapshot(documentToClone)) as GeometryDocument;
 	}
 
-	function cloneProject(projectToClone: GlyphSmithProject): GlyphSmithProject {
-		return structuredClone($state.snapshot(projectToClone)) as GlyphSmithProject;
+	function cloneProject(projectToClone: VibeSVGProject): VibeSVGProject {
+		return structuredClone($state.snapshot(projectToClone)) as VibeSVGProject;
 	}
 
 	function updateActiveDocument(document: GeometryDocument) {
@@ -3103,7 +3642,7 @@
 </script>
 
 <svelte:head>
-	<title>GlyphSmith</title>
+	<title>VibeSVG</title>
 </svelte:head>
 
 <div class="app-shell">
@@ -3696,6 +4235,182 @@
 
 			<details class="inspector-section" open>
 				<summary>
+					<span>Composition</span>
+					<svg
+						aria-hidden="true"
+						class="section-chevron"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
+						<path
+							class="section-chevron-closed"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"
+						/>
+						<path
+							class="section-chevron-open"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m19.5 8.25-7.5 7.5-7.5-7.5"
+						/>
+					</svg>
+				</summary>
+				{#if selectedNode && selectedNodeIds.length === 1}
+					<div class="field-grid composition-fields">
+						<label for="clip-path">Clip</label>
+						<select
+							id="clip-path"
+							class="clip-path-select"
+							value={selectedNode.clipPath?.nodeId ?? ''}
+							onchange={(event) => updateSelectedClipPath(event.currentTarget.value)}
+						>
+							<option value="">None</option>
+							{#each clipPathCandidates as candidate}
+								<option value={candidate.id}>{candidate.name} · {candidate.type}</option>
+							{/each}
+						</select>
+
+						<label for="mask">Mask</label>
+						<select
+							id="mask"
+							class="clip-path-select"
+							value={selectedNode.mask?.nodeId ?? ''}
+							onchange={(event) => updateSelectedMask(event.currentTarget.value)}
+						>
+							<option value="">None</option>
+							{#each maskCandidates as candidate}
+								<option value={candidate.id}>{candidate.name} · {candidate.type}</option>
+							{/each}
+						</select>
+						{#if clipPathCandidates.length === 0}
+							<span></span>
+							<p class="composition-hint">Add a closed shape to use as a clip.</p>
+						{/if}
+					</div>
+				{:else}
+					<div class="empty-row">
+						{selectedNodeIds.length > 1 ? `${selectedNodeIds.length} selected` : 'No selection'}
+					</div>
+				{/if}
+			</details>
+
+			<details class="inspector-section" open>
+				<summary>
+					<span>Transform</span>
+					<svg
+						aria-hidden="true"
+						class="section-chevron"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
+						<path
+							class="section-chevron-closed"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"
+						/>
+						<path
+							class="section-chevron-open"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="m19.5 8.25-7.5 7.5-7.5-7.5"
+						/>
+					</svg>
+				</summary>
+				{#if selectedNode && selectedNodeIds.length === 1}
+					<div class="field-grid transform-fields">
+						<label for="transform-translate-x">Move</label>
+						<div class="transform-inline-fields">
+							<input
+								id="transform-translate-x"
+								aria-label="Horizontal translation"
+								class="text-field"
+								type="number"
+								step="1"
+								value={selectedTransformValue('translateX')}
+								oninput={(event) =>
+									updateSelectedTransformNumber('translateX', event.currentTarget.value)}
+							/>
+							<input
+								aria-label="Vertical translation"
+								class="text-field"
+								type="number"
+								step="1"
+								value={selectedTransformValue('translateY')}
+								oninput={(event) =>
+									updateSelectedTransformNumber('translateY', event.currentTarget.value)}
+							/>
+						</div>
+
+						<label for="transform-rotation">Rotate</label>
+						<div class="transform-number-field">
+							<input
+								id="transform-rotation"
+								class="text-field"
+								type="number"
+								step="1"
+								value={selectedTransformValue('rotation')}
+								oninput={(event) =>
+									updateSelectedTransformNumber('rotation', event.currentTarget.value)}
+							/>
+							<span>°</span>
+						</div>
+
+						<label for="transform-scale-x">Scale</label>
+						<div class="transform-scale-fields">
+							<input
+								id="transform-scale-x"
+								aria-label="Horizontal scale"
+								class="text-field"
+								type="number"
+								min="0.01"
+								step="0.05"
+								value={selectedTransformValue('scaleX')}
+								oninput={(event) =>
+									updateSelectedTransformScale('scaleX', event.currentTarget.value)}
+							/>
+							<input
+								aria-label="Vertical scale"
+								class="text-field"
+								type="number"
+								min="0.01"
+								step="0.05"
+								value={selectedTransformValue('scaleY')}
+								oninput={(event) =>
+									updateSelectedTransformScale('scaleY', event.currentTarget.value)}
+							/>
+							<button
+								aria-label="Lock scale ratio"
+								aria-pressed={isTransformScaleLocked}
+								class:active={isTransformScaleLocked}
+								class="transform-lock-button"
+								type="button"
+								onclick={() => (isTransformScaleLocked = !isTransformScaleLocked)}>Link</button
+							>
+						</div>
+
+						<span></span>
+						<button
+							class="transform-reset-button"
+							disabled={!selectedNode.transform}
+							type="button"
+							onclick={resetSelectedTransform}>Reset transform</button
+						>
+					</div>
+				{:else}
+					<div class="empty-row">
+						{selectedNodeIds.length > 1 ? `${selectedNodeIds.length} selected` : 'No selection'}
+					</div>
+				{/if}
+			</details>
+
+			<details class="inspector-section" open>
+				<summary>
 					<span>Text</span>
 					<svg
 						aria-hidden="true"
@@ -4154,55 +4869,459 @@
 				</summary>
 				{#if selectedNode && selectedNodeIds.length === 1 && selectedNode.type !== 'group'}
 					<div class="field-grid">
-						<label for="fill">Fill</label>
-						<div class="paint-field">
-							<input
-								aria-label="Fill color"
-								class="color-field"
-								type="color"
-								value={colorPickerValue(
-									selectedNode.style?.fill ??
-										(selectedNode.type === 'text' ? selectedNode.fill : undefined),
-									uiColors.primary
-								)}
-								oninput={(event) => updateSelectedStyle('fill', event.currentTarget.value)}
-							/>
-							<input
-								id="fill"
-								class="text-field"
-								value={selectedNode.style?.fill ??
-									(selectedNode.type === 'text' ? selectedNode.fill : undefined) ??
-									'none'}
-								oninput={(event) => updateSelectedStyle('fill', event.currentTarget.value)}
-							/>
-							<button
-								class="inline-button"
-								type="button"
-								onclick={() => updateSelectedStyle('fill', 'none')}>None</button
-							>
+						<label for="fill-mode-solid">Fill</label>
+						<div class="paint-editor">
+							<div class="paint-mode-options">
+								<button
+									id="fill-mode-solid"
+									class:active={paintMode('fill') === 'solid'}
+									type="button"
+									onclick={() => setPaintMode('fill', 'solid')}>Solid</button
+								>
+								<button
+									class:active={paintMode('fill') === 'linear'}
+									type="button"
+									onclick={() => setPaintMode('fill', 'linear')}>Linear</button
+								>
+								<button
+									class:active={paintMode('fill') === 'radial'}
+									type="button"
+									onclick={() => setPaintMode('fill', 'radial')}>Radial</button
+								>
+								<button
+									class:active={paintMode('fill') === 'none'}
+									type="button"
+									onclick={() => setPaintMode('fill', 'none')}>None</button
+								>
+							</div>
+							{#if paintMode('fill') === 'solid'}
+								<div class="solid-paint-row">
+									<input
+										aria-label="Fill color"
+										class="color-field"
+										type="color"
+										value={colorPickerValue(selectedPaint('fill'), uiColors.primary)}
+										oninput={(event) => updateSelectedPaint('fill', event.currentTarget.value)}
+									/>
+									<input
+										id="fill"
+										class="text-field"
+										value={paintFieldValue(selectedPaint('fill'), uiColors.primary)}
+										oninput={(event) => updateSelectedPaint('fill', event.currentTarget.value)}
+									/>
+								</div>
+							{:else if paintMode('fill') !== 'none'}
+								{@const gradient = selectedGradient('fill')}
+								{#if gradient}
+									<div class="gradient-editor">
+										<div
+											class="gradient-preview"
+											style:background={gradientPreviewStyle(gradient)}
+											aria-label="Fill gradient preview"
+										></div>
+										<div class="gradient-stops-heading">
+											<span>Stops</span>
+											<button type="button" onclick={() => addGradientStop(gradient)}>Add</button>
+										</div>
+										<div class="gradient-stops">
+											{#each gradient.stops as stop, index}
+												<div class="gradient-stop">
+													<input
+														aria-label={`Fill stop ${index + 1} color`}
+														class="color-field"
+														type="color"
+														value={colorPickerValue(stop.color, '#2563ff')}
+														oninput={(event) =>
+															updateGradientStop(gradient, index, {
+																color: event.currentTarget.value
+															})}
+													/>
+													<input
+														aria-label={`Fill stop ${index + 1} position`}
+														type="range"
+														min="0"
+														max="100"
+														value={stop.offset * 100}
+														oninput={(event) =>
+															updateGradientStopOffset(gradient, index, event.currentTarget.value)}
+													/>
+													<input
+														aria-label={`Fill stop ${index + 1} position percent`}
+														class="text-field"
+														type="number"
+														min="0"
+														max="100"
+														value={Math.round(stop.offset * 100)}
+														oninput={(event) =>
+															updateGradientStopOffset(gradient, index, event.currentTarget.value)}
+													/>
+													<input
+														aria-label={`Fill stop ${index + 1} opacity`}
+														class="text-field"
+														type="number"
+														min="0"
+														max="100"
+														value={Math.round((stop.opacity ?? 1) * 100)}
+														oninput={(event) =>
+															updateGradientStopOpacity(gradient, index, event.currentTarget.value)}
+													/>
+													<button
+														aria-label={`Remove fill stop ${index + 1}`}
+														class="gradient-stop-remove"
+														disabled={gradient.stops.length <= 2}
+														type="button"
+														onclick={() => removeGradientStop(gradient, index)}>×</button
+													>
+												</div>
+											{/each}
+										</div>
+										<div class="gradient-coordinate-grid">
+											{#if gradient.type === 'linear'}
+												<span>Start</span><input
+													aria-label="Fill gradient start X"
+													class="text-field"
+													type="number"
+													value={gradient.x1}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'x1', event.currentTarget.value)}
+												/><input
+													aria-label="Fill gradient start Y"
+													class="text-field"
+													type="number"
+													value={gradient.y1}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'y1', event.currentTarget.value)}
+												/>
+												<span>End</span><input
+													aria-label="Fill gradient end X"
+													class="text-field"
+													type="number"
+													value={gradient.x2}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'x2', event.currentTarget.value)}
+												/><input
+													aria-label="Fill gradient end Y"
+													class="text-field"
+													type="number"
+													value={gradient.y2}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'y2', event.currentTarget.value)}
+												/>
+											{:else}
+												<span>Center</span><input
+													aria-label="Fill gradient center X"
+													class="text-field"
+													type="number"
+													value={gradient.cx}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'cx', event.currentTarget.value)}
+												/><input
+													aria-label="Fill gradient center Y"
+													class="text-field"
+													type="number"
+													value={gradient.cy}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'cy', event.currentTarget.value)}
+												/>
+												<label for="fill-gradient-radius">Radius</label><input
+													id="fill-gradient-radius"
+													aria-label="Fill gradient radius"
+													class="text-field"
+													type="number"
+													min="0.01"
+													value={gradient.r}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'r', event.currentTarget.value)}
+												/><span></span>
+											{/if}
+										</div>
+									</div>
+								{/if}
+							{/if}
 						</div>
 
-						<label for="stroke">Stroke</label>
-						<div class="paint-field">
-							<input
-								aria-label="Stroke color"
-								class="color-field"
-								type="color"
-								value={colorPickerValue(
-									selectedNode.style?.stroke ??
-										(selectedNode.type === 'text' ? selectedNode.stroke : undefined),
-									'#111827'
-								)}
-								oninput={(event) => updateSelectedStyle('stroke', event.currentTarget.value)}
-							/>
-							<input
-								id="stroke"
-								class="text-field"
-								value={selectedNode.style?.stroke ??
-									(selectedNode.type === 'text' ? selectedNode.stroke : undefined) ??
-									'#111827'}
-								oninput={(event) => updateSelectedStyle('stroke', event.currentTarget.value)}
-							/>
+						<label for="stroke-mode-solid">Stroke</label>
+						<div class="paint-editor">
+							<div class="paint-mode-options">
+								<button
+									id="stroke-mode-solid"
+									class:active={paintMode('stroke') === 'solid'}
+									type="button"
+									onclick={() => setPaintMode('stroke', 'solid')}>Solid</button
+								>
+								<button
+									class:active={paintMode('stroke') === 'linear'}
+									type="button"
+									onclick={() => setPaintMode('stroke', 'linear')}>Linear</button
+								>
+								<button
+									class:active={paintMode('stroke') === 'radial'}
+									type="button"
+									onclick={() => setPaintMode('stroke', 'radial')}>Radial</button
+								>
+								<button
+									class:active={paintMode('stroke') === 'none'}
+									type="button"
+									onclick={() => setPaintMode('stroke', 'none')}>None</button
+								>
+							</div>
+							{#if paintMode('stroke') === 'solid'}
+								<div class="solid-paint-row">
+									<input
+										aria-label="Stroke color"
+										class="color-field"
+										type="color"
+										value={colorPickerValue(selectedPaint('stroke'), '#111827')}
+										oninput={(event) => updateSelectedPaint('stroke', event.currentTarget.value)}
+									/>
+									<input
+										id="stroke"
+										class="text-field"
+										value={paintFieldValue(selectedPaint('stroke'), '#111827')}
+										oninput={(event) => updateSelectedPaint('stroke', event.currentTarget.value)}
+									/>
+								</div>
+							{:else if paintMode('stroke') !== 'none'}
+								{@const gradient = selectedGradient('stroke')}
+								{#if gradient}
+									<div class="gradient-editor">
+										<div
+											class="gradient-preview"
+											style:background={gradientPreviewStyle(gradient)}
+											aria-label="Stroke gradient preview"
+										></div>
+										<div class="gradient-stops-heading">
+											<span>Stops</span>
+											<button type="button" onclick={() => addGradientStop(gradient)}>Add</button>
+										</div>
+										<div class="gradient-stops">
+											{#each gradient.stops as stop, index}
+												<div class="gradient-stop">
+													<input
+														aria-label={`Stroke stop ${index + 1} color`}
+														class="color-field"
+														type="color"
+														value={colorPickerValue(stop.color, '#2563ff')}
+														oninput={(event) =>
+															updateGradientStop(gradient, index, {
+																color: event.currentTarget.value
+															})}
+													/>
+													<input
+														aria-label={`Stroke stop ${index + 1} position`}
+														type="range"
+														min="0"
+														max="100"
+														value={stop.offset * 100}
+														oninput={(event) =>
+															updateGradientStopOffset(gradient, index, event.currentTarget.value)}
+													/>
+													<input
+														aria-label={`Stroke stop ${index + 1} position percent`}
+														class="text-field"
+														type="number"
+														min="0"
+														max="100"
+														value={Math.round(stop.offset * 100)}
+														oninput={(event) =>
+															updateGradientStopOffset(gradient, index, event.currentTarget.value)}
+													/>
+													<input
+														aria-label={`Stroke stop ${index + 1} opacity`}
+														class="text-field"
+														type="number"
+														min="0"
+														max="100"
+														value={Math.round((stop.opacity ?? 1) * 100)}
+														oninput={(event) =>
+															updateGradientStopOpacity(gradient, index, event.currentTarget.value)}
+													/>
+													<button
+														aria-label={`Remove stroke stop ${index + 1}`}
+														class="gradient-stop-remove"
+														disabled={gradient.stops.length <= 2}
+														type="button"
+														onclick={() => removeGradientStop(gradient, index)}>×</button
+													>
+												</div>
+											{/each}
+										</div>
+										<div class="gradient-coordinate-grid">
+											{#if gradient.type === 'linear'}
+												<span>Start</span><input
+													aria-label="Stroke gradient start X"
+													class="text-field"
+													type="number"
+													value={gradient.x1}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'x1', event.currentTarget.value)}
+												/><input
+													aria-label="Stroke gradient start Y"
+													class="text-field"
+													type="number"
+													value={gradient.y1}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'y1', event.currentTarget.value)}
+												/>
+												<span>End</span><input
+													aria-label="Stroke gradient end X"
+													class="text-field"
+													type="number"
+													value={gradient.x2}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'x2', event.currentTarget.value)}
+												/><input
+													aria-label="Stroke gradient end Y"
+													class="text-field"
+													type="number"
+													value={gradient.y2}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'y2', event.currentTarget.value)}
+												/>
+											{:else}
+												<span>Center</span><input
+													aria-label="Stroke gradient center X"
+													class="text-field"
+													type="number"
+													value={gradient.cx}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'cx', event.currentTarget.value)}
+												/><input
+													aria-label="Stroke gradient center Y"
+													class="text-field"
+													type="number"
+													value={gradient.cy}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'cy', event.currentTarget.value)}
+												/>
+												<label for="stroke-gradient-radius">Radius</label><input
+													id="stroke-gradient-radius"
+													aria-label="Stroke gradient radius"
+													class="text-field"
+													type="number"
+													min="0.01"
+													value={gradient.r}
+													oninput={(event) =>
+														updateGradientCoordinate(gradient, 'r', event.currentTarget.value)}
+												/><span></span>
+											{/if}
+										</div>
+									</div>
+								{/if}
+							{/if}
+						</div>
+
+						<label for="effects-blur">Effects</label>
+						<div class="effects-editor">
+							<div class="effect-toggles">
+								<button
+									id="effects-blur"
+									class:active={Boolean(selectedBlurEffect())}
+									type="button"
+									onclick={() => toggleSelectedEffect('blur')}>Blur</button
+								>
+								<button
+									class:active={Boolean(selectedDropShadowEffect())}
+									type="button"
+									onclick={() => toggleSelectedEffect('dropShadow')}>Shadow</button
+								>
+							</div>
+							{#if selectedBlurEffect()}
+								{@const blurEffect = selectedBlurEffect()}
+								{#if blurEffect}
+									<div class="effect-control-grid">
+										<span>Blur</span>
+										<input
+											aria-label="Blur radius"
+											class="text-field"
+											type="number"
+											min="0"
+											step="0.5"
+											value={blurEffect.radius}
+											oninput={(event) => updateSelectedBlurRadius(event.currentTarget.value)}
+										/>
+									</div>
+								{/if}
+							{/if}
+							{#if selectedDropShadowEffect()}
+								{@const shadowEffect = selectedDropShadowEffect()}
+								{#if shadowEffect}
+									<div class="effect-control-grid shadow-controls">
+										<span>Offset</span>
+										<div class="effect-inline-fields">
+											<input
+												aria-label="Shadow horizontal offset"
+												class="text-field"
+												type="number"
+												step="0.5"
+												value={shadowEffect.dx}
+												oninput={(event) =>
+													updateSelectedDropShadowNumber('dx', event.currentTarget.value)}
+											/>
+											<input
+												aria-label="Shadow vertical offset"
+												class="text-field"
+												type="number"
+												step="0.5"
+												value={shadowEffect.dy}
+												oninput={(event) =>
+													updateSelectedDropShadowNumber('dy', event.currentTarget.value)}
+											/>
+										</div>
+										<span>Blur</span>
+										<input
+											aria-label="Shadow blur"
+											class="text-field"
+											type="number"
+											min="0"
+											step="0.5"
+											value={shadowEffect.blur}
+											oninput={(event) =>
+												updateSelectedDropShadowNumber('blur', event.currentTarget.value)}
+										/>
+										<span>Color</span>
+										<div class="solid-paint-row">
+											<input
+												aria-label="Shadow color picker"
+												class="color-field"
+												type="color"
+												value={colorPickerValue(shadowEffect.color, '#000000')}
+												oninput={(event) =>
+													updateSelectedDropShadowColor(event.currentTarget.value)}
+											/>
+											<input
+												aria-label="Shadow color"
+												class="text-field"
+												value={shadowEffect.color}
+												oninput={(event) =>
+													updateSelectedDropShadowColor(event.currentTarget.value)}
+											/>
+										</div>
+										<span>Opacity</span>
+										<div class="effect-opacity-control">
+											<input
+												aria-label="Shadow opacity"
+												type="range"
+												min="0"
+												max="100"
+												value={(shadowEffect.opacity ?? 1) * 100}
+												oninput={(event) =>
+													updateSelectedDropShadowOpacity(event.currentTarget.value)}
+											/>
+											<input
+												aria-label="Shadow opacity percent"
+												class="text-field"
+												type="number"
+												min="0"
+												max="100"
+												value={Math.round((shadowEffect.opacity ?? 1) * 100)}
+												oninput={(event) =>
+													updateSelectedDropShadowOpacity(event.currentTarget.value)}
+											/>
+										</div>
+									</div>
+								{/if}
+							{/if}
 						</div>
 
 						<label for="stroke-width">Stroke W</label>

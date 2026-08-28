@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, unwatchFile, watchFile, writeFileSync } from "node:fs";
 import { basename } from "node:path";
-import { createProject, isGlyphSmithProject, type GlyphSmithProject, type Selection } from "@glyphsmith/ast";
+import { createProject, isVibeSVGProject, type VibeSVGProject, type Selection } from "@vibesvg/ast";
 
 export type ProjectChange = {
-  project: GlyphSmithProject;
+  project: VibeSVGProject;
   revision: string;
   source?: unknown;
 };
@@ -48,11 +48,11 @@ export class ProjectStore {
     };
   }
 
-  readProject(): GlyphSmithProject {
+  readProject(): VibeSVGProject {
     return this.parseProjectText(this.lastProjectText);
   }
 
-  writeProject(project: GlyphSmithProject, source?: unknown): ProjectChange {
+  writeProject(project: VibeSVGProject, source?: unknown): ProjectChange {
     const projectText = `${JSON.stringify(project, null, 2)}\n`;
 
     writeFileSync(this.projectFile, projectText, "utf8");
@@ -69,7 +69,7 @@ export class ProjectStore {
     return change;
   }
 
-  updateProject(mutator: (project: GlyphSmithProject) => GlyphSmithProject, source?: unknown): ProjectChange {
+  updateProject(mutator: (project: VibeSVGProject) => VibeSVGProject, source?: unknown): ProjectChange {
     return this.writeProject(mutator(this.readProject()), source);
   }
 
@@ -97,11 +97,11 @@ export class ProjectStore {
     return readFileSync(this.projectFile, "utf8");
   }
 
-  private parseProjectText(projectText: string): GlyphSmithProject {
+  private parseProjectText(projectText: string): VibeSVGProject {
     const project = JSON.parse(projectText) as unknown;
 
-    if (!isGlyphSmithProject(project)) {
-      throw new Error(`Invalid GlyphSmith project: ${this.projectFile}`);
+    if (!isVibeSVGProject(project)) {
+      throw new Error(`Invalid VibeSVG project: ${this.projectFile}`);
     }
 
     return project;
@@ -114,9 +114,9 @@ export class ProjectStore {
   }
 }
 
-export function createInitialProject(projectFile: string): GlyphSmithProject {
+export function createInitialProject(projectFile: string): VibeSVGProject {
   return createProject({
-    name: basename(projectFile).replace(/\.gs\.json$/i, "") || "GlyphSmith Project",
+    name: basename(projectFile).replace(/\.gs\.json$/i, "") || "VibeSVG Project",
     width: 256,
     height: 256
   });

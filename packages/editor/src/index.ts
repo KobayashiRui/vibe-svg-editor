@@ -1,7 +1,8 @@
-import { getDocumentViewBox } from "@glyphsmith/ast";
+import { getDocumentGradients, getDocumentViewBox } from "@vibesvg/ast";
 import type {
   Bounds,
   DocumentBackground,
+  Effect,
   GeometryDocument,
   GeometryNode,
   GroupNode,
@@ -9,6 +10,8 @@ import type {
   LineNode,
   NodeId,
   NodeStyle,
+  NodeTransform,
+  Paint,
   PathNode,
   PathSpline,
   Point,
@@ -17,7 +20,7 @@ import type {
   Segment,
   TextNode,
   UpdatePatch,
-} from "@glyphsmith/ast";
+} from "@vibesvg/ast";
 
 export type Tool = "select" | "rect" | "ellipse" | "triangle" | "path" | "text";
 export type PathSegmentMode =
@@ -376,7 +379,7 @@ export function renderDocument(
   drawDocumentBackground(context, document);
 
   for (const child of document.root.children) {
-    drawNode(context, child);
+    drawNode(context, child, document);
   }
 
   context.restore();
@@ -658,7 +661,10 @@ export function getEditHandles(
       return [];
     }
 
-    return handlesForNode(node);
+    return handlesForNode(node).map((handle) => ({
+      ...handle,
+      point: applyTransformToPoint(handle.point, node.transform),
+    }));
   });
 }
 
@@ -716,28 +722,30 @@ export function createEditHandleUpdatePatch(
     return undefined;
   }
 
+  const localPoint = inverseTransformPoint(point, node.transform);
+
   if (isBBoxHandleKind(handle.kind)) {
-    return createBBoxResizeUpdatePatch(node, handle.kind, point);
+    return createBBoxResizeUpdatePatch(node, handle.kind, localPoint);
   }
 
   if (node.type === "rect") {
-    return createRectHandleUpdatePatch(node, handle.kind, point);
+    return createRectHandleUpdatePatch(node, handle.kind, localPoint);
   }
 
   if (node.type === "line") {
-    return createLineHandleUpdatePatch(node, handle.kind, point);
+    return createLineHandleUpdatePatch(node, handle.kind, localPoint);
   }
 
   if (node.type === "path") {
-    return createPathHandleUpdatePatch(node, handle, point);
+    return createPathHandleUpdatePatch(node, handle, localPoint);
   }
 
   if (node.type === "ellipse") {
-    return createEllipseHandleUpdatePatch(node, handle.kind, point);
+    return createEllipseHandleUpdatePatch(node, handle.kind, localPoint);
   }
 
   if (node.type === "polygon" || node.type === "polyline") {
-    return createPolygonHandleUpdatePatch(node, handle, point);
+    return createPolygonHandleUpdatePatch(node, handle, localPoint);
   }
 
   return undefined;
@@ -828,18 +836,37 @@ function drawCheckerboardBackground(
   }
 }
 
-function drawNode(context: CanvasRenderingContext2D, node: GeometryNode): void {
+function drawNode(
+  context: CanvasRenderingContext2D,
+  node: GeometryNode,
+  document: GeometryDocument,
+): void {
   if (node.visible === false) {
     return;
   }
 
+  const maskNodeId = node.mask?.nodeId;
+  const maskNode = maskNodeId
+    ? findNodeInTree(document.root, maskNodeId)
+    : undefined;
+
+  if (
+    maskNode &&
+    maskNode.id !== node.id &&
+    drawMaskedNode(context, node, maskNode, document)
+  ) {
+    return;
+  }
+
   context.save();
-  applyStyle(context, node.style);
+  applyClipPath(context, node, document);
+  applyNodeTransform(context, node.transform);
+  applyStyle(context, node.style, document);
 
   switch (node.type) {
     case "group":
       for (const child of node.children) {
-        drawNode(context, child);
+        drawNode(context, child, document);
       }
       break;
     case "rect":
@@ -870,14 +897,63 @@ function drawNode(context: CanvasRenderingContext2D, node: GeometryNode): void {
       paintCurrentPath(context, node.style);
       break;
     case "text":
-      drawText(context, node);
+      drawText(context, node, document);
       break;
   }
 
   context.restore();
 }
 
-function drawText(context: CanvasRenderingContext2D, node: TextNode): void {
+function drawMaskedNode(
+  context: CanvasRenderingContext2D,
+  node: GeometryNode,
+  maskNode: GeometryNode,
+  document: GeometryDocument,
+): boolean {
+  const layer = context.canvas.ownerDocument?.createElement("canvas");
+
+  if (!layer) {
+    return false;
+  }
+
+  layer.width = context.canvas.width;
+  layer.height = context.canvas.height;
+  const layerContext = layer.getContext("2d");
+
+  if (!layerContext) {
+    return false;
+  }
+
+  const currentTransform = context.getTransform();
+  layerContext.setTransform(currentTransform);
+  drawNode(
+    layerContext,
+    { ...node, mask: undefined } as GeometryNode,
+    document,
+  );
+
+  layerContext.save();
+  layerContext.globalCompositeOperation = "destination-in";
+  drawNode(
+    layerContext,
+    { ...maskNode, mask: undefined } as GeometryNode,
+    document,
+  );
+  layerContext.restore();
+
+  context.save();
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.drawImage(layer, 0, 0);
+  context.restore();
+
+  return true;
+}
+
+function drawText(
+  context: CanvasRenderingContext2D,
+  node: TextNode,
+  document: GeometryDocument,
+): void {
   const fontSize = node.fontSize ?? 16;
   const fontFamily = node.fontFamily ?? "Inter, system-ui, sans-serif";
   const fontStyle = node.fontStyle ?? "normal";
@@ -892,7 +968,11 @@ function drawText(context: CanvasRenderingContext2D, node: TextNode): void {
   context.textBaseline = canvasTextBaseline(node.dominantBaseline);
 
   if ((node.style?.fill ?? node.fill ?? "#111827") !== "none") {
-    context.fillStyle = node.style?.fill ?? node.fill ?? "#111827";
+    context.fillStyle = resolveCanvasPaint(
+      context,
+      node.style?.fill ?? node.fill ?? "#111827",
+      document,
+    );
 
     for (const [index, line] of lines.entries()) {
       context.fillText(line, node.x, startY + lineHeight * index);
@@ -900,7 +980,11 @@ function drawText(context: CanvasRenderingContext2D, node: TextNode): void {
   }
 
   if ((node.style?.stroke ?? node.stroke ?? "none") !== "none") {
-    context.strokeStyle = node.style?.stroke ?? node.stroke ?? "none";
+    context.strokeStyle = resolveCanvasPaint(
+      context,
+      node.style?.stroke ?? node.stroke ?? "none",
+      document,
+    );
     context.lineWidth = node.style?.strokeWidth ?? node.strokeWidth ?? 1;
 
     for (const [index, line] of lines.entries()) {
@@ -982,6 +1066,82 @@ function drawRect(context: CanvasRenderingContext2D, node: RectNode): void {
   }
 
   paintCurrentPath(context, node.style);
+}
+
+function applyClipPath(
+  context: CanvasRenderingContext2D,
+  node: GeometryNode,
+  document: GeometryDocument,
+): void {
+  const clipNodeId = node.clipPath?.nodeId;
+
+  if (!clipNodeId || clipNodeId === node.id) {
+    return;
+  }
+
+  const clipNode = findNodeInTree(document.root, clipNodeId);
+
+  if (!clipNode || clipNode.type === "group" || clipNode.type === "text") {
+    return;
+  }
+
+  applyNodeTransform(context, clipNode.transform);
+  const hasPath = traceNodePath(context, clipNode);
+
+  if (hasPath) {
+    context.clip();
+  }
+
+  applyInverseNodeTransform(context, clipNode.transform);
+}
+
+function traceNodePath(
+  context: CanvasRenderingContext2D,
+  node: GeometryNode,
+): boolean {
+  switch (node.type) {
+    case "rect": {
+      context.beginPath();
+      const rx = node.rx ?? node.ry ?? 0;
+      const ry = node.ry ?? node.rx ?? 0;
+      if (rx > 0 || ry > 0) {
+        context.roundRect(node.x, node.y, node.width, node.height, [rx, ry]);
+      } else {
+        context.rect(node.x, node.y, node.width, node.height);
+      }
+      return true;
+    }
+    case "circle":
+      context.beginPath();
+      context.arc(node.cx, node.cy, node.r, 0, Math.PI * 2);
+      return true;
+    case "ellipse":
+      context.beginPath();
+      context.ellipse(node.cx, node.cy, node.rx, node.ry, 0, 0, Math.PI * 2);
+      return true;
+    case "polygon":
+      if (!node.points[0]) {
+        return false;
+      }
+      context.beginPath();
+      context.moveTo(node.points[0].x, node.points[0].y);
+      for (const point of node.points.slice(1)) {
+        context.lineTo(point.x, point.y);
+      }
+      context.closePath();
+      return true;
+    case "path":
+      if (!node.closed) {
+        return false;
+      }
+      drawPath(context, node);
+      return true;
+    case "group":
+    case "line":
+    case "polyline":
+    case "text":
+      return false;
+  }
 }
 
 function drawPoints(
@@ -1185,11 +1345,10 @@ function vectorAngle(ux: number, uy: number, vx: number, vy: number): number {
 function applyStyle(
   context: CanvasRenderingContext2D,
   style: NodeStyle | undefined,
+  document: GeometryDocument,
 ): void {
-  context.fillStyle =
-    style?.fill && style.fill !== "none" ? style.fill : "transparent";
-  context.strokeStyle =
-    style?.stroke && style.stroke !== "none" ? style.stroke : "transparent";
+  context.fillStyle = resolveCanvasPaint(context, style?.fill, document);
+  context.strokeStyle = resolveCanvasPaint(context, style?.stroke, document);
   context.lineWidth = style?.strokeWidth ?? 2;
   context.lineCap = canvasLineCap(style?.strokeLinecap);
   context.lineJoin = canvasLineJoin(style?.strokeLinejoin);
@@ -1197,6 +1356,101 @@ function applyStyle(
   context.setLineDash(parseStrokeDasharray(style?.strokeDasharray));
   context.lineDashOffset = style?.strokeDashoffset ?? 0;
   context.globalAlpha = style?.opacity ?? 1;
+  context.filter = renderCanvasEffects(style?.effects);
+}
+
+function renderCanvasEffects(effects: Effect[] | undefined): string {
+  if (!effects?.length) {
+    return "none";
+  }
+
+  return effects
+    .map((effect) => {
+      if (effect.type === "blur") {
+        return `blur(${Math.max(0, effect.radius)}px)`;
+      }
+
+      return `drop-shadow(${effect.dx}px ${effect.dy}px ${Math.max(0, effect.blur)}px ${colorWithOpacity(effect.color, effect.opacity)})`;
+    })
+    .join(" ");
+}
+
+function resolveCanvasPaint(
+  context: CanvasRenderingContext2D,
+  paint: Paint | undefined,
+  document: GeometryDocument,
+): string | CanvasGradient {
+  if (!paint || paint === "none") {
+    return "transparent";
+  }
+
+  if (typeof paint === "string") {
+    return paint;
+  }
+
+  const gradient = getDocumentGradients(document).find(
+    (current) => current.id === paint.gradientId,
+  );
+
+  if (!gradient) {
+    return "transparent";
+  }
+
+  const canvasGradient =
+    gradient.type === "linear"
+      ? context.createLinearGradient(
+          gradient.x1,
+          gradient.y1,
+          gradient.x2,
+          gradient.y2,
+        )
+      : context.createRadialGradient(
+          gradient.fx ?? gradient.cx,
+          gradient.fy ?? gradient.cy,
+          0,
+          gradient.cx,
+          gradient.cy,
+          gradient.r,
+        );
+
+  for (const stop of gradient.stops) {
+    canvasGradient.addColorStop(
+      stop.offset,
+      colorWithOpacity(stop.color, stop.opacity),
+    );
+  }
+
+  return canvasGradient;
+}
+
+function colorWithOpacity(color: string, opacity: number | undefined): string {
+  if (opacity === undefined || opacity >= 1) {
+    return color;
+  }
+
+  const hex = color.trim().replace(/^#/, "");
+  const normalized =
+    hex.length === 3
+      ? hex
+          .split("")
+          .map((part) => `${part}${part}`)
+          .join("")
+      : hex.length === 4
+        ? hex
+            .slice(0, 3)
+            .split("")
+            .map((part) => `${part}${part}`)
+            .join("")
+        : hex.slice(0, 6);
+
+  if (!/^[\da-f]{6}$/i.test(normalized)) {
+    return color;
+  }
+
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${Math.max(0, Math.min(1, opacity))})`;
 }
 
 function canvasLineCap(
@@ -1451,10 +1705,12 @@ function hitTestNode(
     return undefined;
   }
 
+  const localPoint = inverseTransformPoint(point, node.transform);
+
   if (node.type === "group") {
     // Later children are visually in front of earlier children.
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
-      const hit = hitTestNode(node.children[index], point, tolerance);
+      const hit = hitTestNode(node.children[index], localPoint, tolerance);
 
       if (hit) {
         return hit;
@@ -1464,7 +1720,7 @@ function hitTestNode(
     return undefined;
   }
 
-  if (isPointNearNode(node, point, tolerance)) {
+  if (isPointNearNode(node, localPoint, tolerance)) {
     return node.id;
   }
 
@@ -1619,9 +1875,19 @@ function isPointInsidePolygon(point: Point, polygon: Point[]): boolean {
 function getNodeBoundsInTree(
   node: GeometryNode,
   nodeId: NodeId,
+  ancestorTransforms: NodeTransform[] = [],
 ): Bounds | undefined {
   if (node.id === nodeId) {
-    return boundsForNode(node);
+    const bounds = boundsForNode(node);
+
+    return bounds
+      ? [...ancestorTransforms]
+          .reverse()
+          .reduce(
+            (current, transform) => transformBounds(current, transform),
+            bounds,
+          )
+      : undefined;
   }
 
   if (node.type !== "group") {
@@ -1629,7 +1895,13 @@ function getNodeBoundsInTree(
   }
 
   for (const child of node.children) {
-    const bounds = getNodeBoundsInTree(child, nodeId);
+    const bounds = getNodeBoundsInTree(
+      child,
+      nodeId,
+      node.transform
+        ? [...ancestorTransforms, node.transform]
+        : ancestorTransforms,
+    );
 
     if (bounds) {
       return bounds;
@@ -2828,11 +3100,12 @@ function midpoint(start: Point, end: Point, perpendicularScale: number): Point {
 }
 
 function boundsForNode(node: GeometryNode): Bounds | undefined {
-  if (node.type === "group") {
-    return mergeBounds(node.children.map(boundsForNode).filter(isBounds));
-  }
+  const bounds =
+    node.type === "group"
+      ? mergeBounds(node.children.map(boundsForNode).filter(isBounds))
+      : expandBoundsForStroke(node, geometryBoundsForNode(node));
 
-  return expandBoundsForStroke(node, geometryBoundsForNode(node));
+  return bounds ? transformBounds(bounds, node.transform) : undefined;
 }
 
 function geometryBoundsForNode(node: GeometryNode): Bounds | undefined {
@@ -2840,7 +3113,9 @@ function geometryBoundsForNode(node: GeometryNode): Bounds | undefined {
 
   switch (node.type) {
     case "group":
-      return mergeBounds(node.children.map(geometryBoundsForNode).filter(isBounds));
+      return mergeBounds(
+        node.children.map(geometryBoundsForNode).filter(isBounds),
+      );
     case "rect":
       bounds = {
         x: node.x,
@@ -2922,6 +3197,129 @@ function boundsForTextNode(node: TextNode): Bounds {
     y,
     width,
     height,
+  };
+}
+
+function applyNodeTransform(
+  context: CanvasRenderingContext2D,
+  transform: NodeTransform | undefined,
+): void {
+  const matrix = transformMatrix(transform);
+  context.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
+}
+
+function transformBounds(
+  bounds: Bounds,
+  transform: NodeTransform | undefined,
+): Bounds {
+  if (!transform) {
+    return bounds;
+  }
+
+  const points = [
+    applyTransformToPoint({ x: bounds.x, y: bounds.y }, transform),
+    applyTransformToPoint(
+      { x: bounds.x + bounds.width, y: bounds.y },
+      transform,
+    ),
+    applyTransformToPoint(
+      { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+      transform,
+    ),
+    applyTransformToPoint(
+      { x: bounds.x, y: bounds.y + bounds.height },
+      transform,
+    ),
+  ];
+
+  return (
+    mergeBounds(points.map((point) => ({ ...point, width: 0, height: 0 }))) ??
+    bounds
+  );
+}
+
+function applyInverseNodeTransform(
+  context: CanvasRenderingContext2D,
+  transform: NodeTransform | undefined,
+): void {
+  const matrix = transformMatrix(transform);
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
+
+  if (Math.abs(determinant) < Number.EPSILON) {
+    return;
+  }
+
+  context.transform(
+    matrix.d / determinant,
+    -matrix.b / determinant,
+    -matrix.c / determinant,
+    matrix.a / determinant,
+    (matrix.c * matrix.f - matrix.d * matrix.e) / determinant,
+    (matrix.b * matrix.e - matrix.a * matrix.f) / determinant,
+  );
+}
+
+function applyTransformToPoint(
+  point: Point,
+  transform: NodeTransform | undefined,
+): Point {
+  const matrix = transformMatrix(transform);
+
+  return {
+    x: matrix.a * point.x + matrix.c * point.y + matrix.e,
+    y: matrix.b * point.x + matrix.d * point.y + matrix.f,
+  };
+}
+
+function inverseTransformPoint(
+  point: Point,
+  transform: NodeTransform | undefined,
+): Point {
+  const matrix = transformMatrix(transform);
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
+
+  if (Math.abs(determinant) < Number.EPSILON) {
+    return point;
+  }
+
+  const x = point.x - matrix.e;
+  const y = point.y - matrix.f;
+
+  return {
+    x: (matrix.d * x - matrix.c * y) / determinant,
+    y: (-matrix.b * x + matrix.a * y) / determinant,
+  };
+}
+
+function transformMatrix(transform: NodeTransform | undefined): {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+} {
+  const translateX = transform?.translateX ?? 0;
+  const translateY = transform?.translateY ?? 0;
+  const rotation = ((transform?.rotation ?? 0) * Math.PI) / 180;
+  const scaleX = transform?.scaleX ?? 1;
+  const scaleY = transform?.scaleY ?? 1;
+  const originX = transform?.originX ?? 0;
+  const originY = transform?.originY ?? 0;
+  const cosine = Math.cos(rotation);
+  const sine = Math.sin(rotation);
+  const a = cosine * scaleX;
+  const b = sine * scaleX;
+  const c = -sine * scaleY;
+  const d = cosine * scaleY;
+
+  return {
+    a,
+    b,
+    c,
+    d,
+    e: translateX + originX - a * originX - c * originY,
+    f: translateY + originY - b * originX - d * originY,
   };
 }
 

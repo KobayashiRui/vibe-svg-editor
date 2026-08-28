@@ -1,5 +1,5 @@
 {
-  "name": "@glyphsmith/mcp",
+  "name": "@vibesvg/mcp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,9 +14,10 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@glyphsmith/ast": "workspace:*",
-    "@glyphsmith/kernel": "workspace:*",
-    "@glyphsmith/svg": "workspace:*"
+    "@resvg/resvg-js": "^2.6.2",
+    "@vibesvg/ast": "workspace:*",
+    "@vibesvg/kernel": "workspace:*",
+    "@vibesvg/svg": "workspace:*"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

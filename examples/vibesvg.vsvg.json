@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "project-glyphsmith-icons",
-  "name": "glyphsmith icons",
+  "id": "project-vibesvg-icons",
+  "name": "vibesvg icons",
   "activePageId": "page-4",
-  "projectPrompt": "Official GlyphSmith icon set. Keep icons simple, geometric, SVG-native, and suitable for 24px outline rendering.",
+  "projectPrompt": "Official VibeSVG icon set. Keep icons simple, geometric, SVG-native, and suitable for 24px outline rendering.",
   "settings": {
     "defaultCanvas": {
       "width": 24,
@@ -25,210 +25,899 @@
           "name": "Root",
           "children": [
             {
-              "id": "app-icon-left-bracket",
-              "type": "path",
-              "name": "Left Rounded Bracket",
-              "start": {
-                "x": 9.25,
-                "y": 3.9845436507936505
-              },
-              "closed": false,
-              "segments": [
+              "id": "group-2",
+              "name": "Group",
+              "type": "group",
+              "children": [
                 {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 8.68,
-                    "y": 5.04454365079365
+                  "id": "v-blue-shadow",
+                  "type": "path",
+                  "name": "Blue arm depth",
+                  "start": {
+                    "x": 15.37,
+                    "y": 4.687
                   },
-                  "control2": {
-                    "x": 7.95,
-                    "y": 5.7745436507936505
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 15.916,
+                        "y": 3.24
+                      },
+                      "control2": {
+                        "x": 17.532,
+                        "y": 2.508
+                      },
+                      "to": {
+                        "x": 18.979,
+                        "y": 3.054
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 20.426,
+                        "y": 3.6
+                      },
+                      "control2": {
+                        "x": 21.158,
+                        "y": 5.216
+                      },
+                      "to": {
+                        "x": 20.612,
+                        "y": 6.663
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 16.612,
+                        "y": 17.263
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.066,
+                        "y": 18.71
+                      },
+                      "control2": {
+                        "x": 14.45,
+                        "y": 19.442
+                      },
+                      "to": {
+                        "x": 13.003,
+                        "y": 18.896
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 11.556,
+                        "y": 18.35
+                      },
+                      "control2": {
+                        "x": 10.824,
+                        "y": 16.734
+                      },
+                      "to": {
+                        "x": 11.37,
+                        "y": 15.287
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 15.37,
+                        "y": 4.687
+                      }
+                    }
+                  ],
+                  "transform": {
+                    "translateX": 0.04,
+                    "translateY": 0.16
                   },
-                  "to": {
-                    "x": 7.15,
-                    "y": 6.74454365079365
+                  "style": {
+                    "fill": "#020817",
+                    "stroke": "none",
+                    "opacity": 0.46,
+                    "effects": [
+                      {
+                        "type": "dropShadow",
+                        "dx": 0.08,
+                        "dy": 0.2,
+                        "blur": 0.32,
+                        "color": "#000000",
+                        "opacity": 0.42
+                      }
+                    ]
                   }
                 },
                 {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 5.8,
-                    "y": 8.39454365079365
+                  "id": "v-blue-body",
+                  "type": "path",
+                  "name": "Blue sculpted arm",
+                  "start": {
+                    "x": 15.37,
+                    "y": 4.687
                   },
-                  "control2": {
-                    "x": 4.9,
-                    "y": 9.99454365079365
-                  },
-                  "to": {
-                    "x": 4.9,
-                    "y": 11.94454365079365
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 15.916,
+                        "y": 3.24
+                      },
+                      "control2": {
+                        "x": 17.532,
+                        "y": 2.508
+                      },
+                      "to": {
+                        "x": 18.979,
+                        "y": 3.054
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 20.426,
+                        "y": 3.6
+                      },
+                      "control2": {
+                        "x": 21.158,
+                        "y": 5.216
+                      },
+                      "to": {
+                        "x": 20.612,
+                        "y": 6.663
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 16.612,
+                        "y": 17.263
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.066,
+                        "y": 18.71
+                      },
+                      "control2": {
+                        "x": 14.45,
+                        "y": 19.442
+                      },
+                      "to": {
+                        "x": 13.003,
+                        "y": 18.896
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 11.556,
+                        "y": 18.35
+                      },
+                      "control2": {
+                        "x": 10.824,
+                        "y": 16.734
+                      },
+                      "to": {
+                        "x": 11.37,
+                        "y": 15.287
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 15.37,
+                        "y": 4.687
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": {
+                      "type": "gradient",
+                      "gradientId": "v-photo-blue-body"
+                    },
+                    "stroke": "none",
+                    "opacity": 1,
+                    "effects": [
+                      {
+                        "type": "dropShadow",
+                        "dx": 0.16,
+                        "dy": 0.3,
+                        "blur": 0.6,
+                        "color": "#000000",
+                        "opacity": 0.52
+                      }
+                    ]
                   }
                 },
                 {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 4.9,
-                    "y": 13.74454365079365
+                  "id": "v-blue-gloss",
+                  "type": "path",
+                  "name": "Blue face gloss",
+                  "start": {
+                    "x": 15.37,
+                    "y": 4.683
                   },
-                  "control2": {
-                    "x": 5.78,
-                    "y": 15.044543650793651
-                  },
-                  "to": {
-                    "x": 7.02,
-                    "y": 16.61454365079365
-                  }
-                },
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 7.85,
-                    "y": 17.67454365079365
-                  },
-                  "control2": {
-                    "x": 8.55,
-                    "y": 18.71454365079365
-                  },
-                  "to": {
-                    "x": 9.05,
-                    "y": 19.984543650793647
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 15.916,
+                        "y": 3.236
+                      },
+                      "control2": {
+                        "x": 17.532,
+                        "y": 2.504
+                      },
+                      "to": {
+                        "x": 18.979,
+                        "y": 3.05
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 20.426,
+                        "y": 3.596
+                      },
+                      "control2": {
+                        "x": 21.158,
+                        "y": 5.212
+                      },
+                      "to": {
+                        "x": 20.612,
+                        "y": 6.659
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 16.612,
+                        "y": 17.259
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.066,
+                        "y": 18.706
+                      },
+                      "control2": {
+                        "x": 14.45,
+                        "y": 19.438
+                      },
+                      "to": {
+                        "x": 13.003,
+                        "y": 18.892
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 11.556,
+                        "y": 18.346
+                      },
+                      "control2": {
+                        "x": 10.824,
+                        "y": 16.73
+                      },
+                      "to": {
+                        "x": 11.37,
+                        "y": 15.283
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 15.37,
+                        "y": 4.683
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": {
+                      "type": "gradient",
+                      "gradientId": "v-photo-blue-gloss"
+                    },
+                    "stroke": "none",
+                    "opacity": 0.38
                   }
                 }
-              ],
-              "style": {
-                "fill": "none",
-                "stroke": "#3b82f6",
-                "strokeWidth": 1.95,
-                "strokeLinecap": "round",
-                "strokeLinejoin": "round"
-              }
+              ]
             },
             {
-              "id": "app-icon-right-bracket",
-              "type": "path",
-              "name": "Right Filled Bracket",
-              "start": {
-                "x": 14.75,
-                "y": 3.9882605820105823
-              },
-              "closed": false,
-              "segments": [
+              "id": "group-4",
+              "name": "Group",
+              "type": "group",
+              "children": [
                 {
-                  "type": "line",
-                  "to": {
-                    "x": 19.096891534391535,
-                    "y": 11.952546296296296
+                  "id": "v-dark-shadow",
+                  "type": "path",
+                  "name": "Dark arm depth",
+                  "start": {
+                    "x": 2.078,
+                    "y": 7.178
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 1.278,
+                        "y": 5.718
+                      },
+                      "control2": {
+                        "x": 1.818,
+                        "y": 3.938
+                      },
+                      "to": {
+                        "x": 3.268,
+                        "y": 3.148
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 4.718,
+                        "y": 2.358
+                      },
+                      "control2": {
+                        "x": 6.518,
+                        "y": 2.898
+                      },
+                      "to": {
+                        "x": 7.318,
+                        "y": 4.348
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 9.148,
+                        "y": 7.748
+                      },
+                      "control2": {
+                        "x": 11.318,
+                        "y": 11.818
+                      },
+                      "to": {
+                        "x": 13.118,
+                        "y": 15.278
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 14.048,
+                        "y": 17.018
+                      },
+                      "control2": {
+                        "x": 15.297,
+                        "y": 18.129
+                      },
+                      "to": {
+                        "x": 16.567,
+                        "y": 17.099
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.067,
+                        "y": 19.429
+                      },
+                      "control2": {
+                        "x": 14.818,
+                        "y": 21.548
+                      },
+                      "to": {
+                        "x": 12.778,
+                        "y": 22.018
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 10.818,
+                        "y": 22.478
+                      },
+                      "control2": {
+                        "x": 9.178,
+                        "y": 21.078
+                      },
+                      "to": {
+                        "x": 8.358,
+                        "y": 19.338
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 2.078,
+                        "y": 7.178
+                      }
+                    }
+                  ],
+                  "transform": {
+                    "translateX": 0.05,
+                    "translateY": 0.18
+                  },
+                  "style": {
+                    "fill": "#020711",
+                    "stroke": "none",
+                    "opacity": 0.58,
+                    "effects": [
+                      {
+                        "type": "dropShadow",
+                        "dx": 0.1,
+                        "dy": 0.28,
+                        "blur": 0.5,
+                        "color": "#000000",
+                        "opacity": 0.46
+                      }
+                    ]
                   }
                 },
                 {
-                  "type": "line",
-                  "to": {
-                    "x": 14.75,
-                    "y": 19.988260582010582
+                  "id": "v-dark-body",
+                  "type": "path",
+                  "name": "Dark sculpted arm",
+                  "start": {
+                    "x": 2.078,
+                    "y": 7.178
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 1.278,
+                        "y": 5.718
+                      },
+                      "control2": {
+                        "x": 1.818,
+                        "y": 3.938
+                      },
+                      "to": {
+                        "x": 3.268,
+                        "y": 3.148
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 4.718,
+                        "y": 2.358
+                      },
+                      "control2": {
+                        "x": 6.518,
+                        "y": 2.898
+                      },
+                      "to": {
+                        "x": 7.318,
+                        "y": 4.348
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 9.148,
+                        "y": 7.748
+                      },
+                      "control2": {
+                        "x": 11.318,
+                        "y": 11.818
+                      },
+                      "to": {
+                        "x": 13.118,
+                        "y": 15.278
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 14.048,
+                        "y": 17.018
+                      },
+                      "control2": {
+                        "x": 15.348,
+                        "y": 18.248
+                      },
+                      "to": {
+                        "x": 16.618,
+                        "y": 17.218
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.118,
+                        "y": 19.548
+                      },
+                      "control2": {
+                        "x": 14.818,
+                        "y": 21.548
+                      },
+                      "to": {
+                        "x": 12.778,
+                        "y": 22.018
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 10.818,
+                        "y": 22.478
+                      },
+                      "control2": {
+                        "x": 9.178,
+                        "y": 21.078
+                      },
+                      "to": {
+                        "x": 8.358,
+                        "y": 19.338
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 2.078,
+                        "y": 7.178
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": {
+                      "type": "gradient",
+                      "gradientId": "v-photo-dark-body"
+                    },
+                    "stroke": "none",
+                    "opacity": 1,
+                    "effects": [
+                      {
+                        "type": "dropShadow",
+                        "dx": 0.16,
+                        "dy": 0.32,
+                        "blur": 0.64,
+                        "color": "#000000",
+                        "opacity": 0.58
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "v-dark-gloss",
+                  "type": "path",
+                  "name": "Dark face gloss",
+                  "start": {
+                    "x": 2.076,
+                    "y": 7.176
+                  },
+                  "closed": true,
+                  "segments": [
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 1.276,
+                        "y": 5.716
+                      },
+                      "control2": {
+                        "x": 1.816,
+                        "y": 3.936
+                      },
+                      "to": {
+                        "x": 3.266,
+                        "y": 3.146
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 4.716,
+                        "y": 2.356
+                      },
+                      "control2": {
+                        "x": 6.516,
+                        "y": 2.896
+                      },
+                      "to": {
+                        "x": 7.316,
+                        "y": 4.346
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 9.146,
+                        "y": 7.746
+                      },
+                      "control2": {
+                        "x": 11.316,
+                        "y": 11.816
+                      },
+                      "to": {
+                        "x": 13.116,
+                        "y": 15.276
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 14.046,
+                        "y": 17.016
+                      },
+                      "control2": {
+                        "x": 15.392,
+                        "y": 18.326
+                      },
+                      "to": {
+                        "x": 16.662,
+                        "y": 17.296
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 16.162,
+                        "y": 19.626
+                      },
+                      "control2": {
+                        "x": 14.816,
+                        "y": 21.546
+                      },
+                      "to": {
+                        "x": 12.776,
+                        "y": 22.016
+                      }
+                    },
+                    {
+                      "type": "cubic",
+                      "control1": {
+                        "x": 10.816,
+                        "y": 22.476
+                      },
+                      "control2": {
+                        "x": 9.176,
+                        "y": 21.076
+                      },
+                      "to": {
+                        "x": 8.356,
+                        "y": 19.336
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "to": {
+                        "x": 2.076,
+                        "y": 7.176
+                      }
+                    }
+                  ],
+                  "style": {
+                    "fill": {
+                      "type": "gradient",
+                      "gradientId": "v-photo-dark-gloss"
+                    },
+                    "stroke": "none",
+                    "opacity": 0.42
                   }
                 }
-              ],
-              "style": {
-                "fill": "none",
-                "stroke": "#3b82f6",
-                "strokeWidth": 1.95,
-                "strokeLinecap": "round",
-                "strokeLinejoin": "round"
-              }
-            },
-            {
-              "id": "app-icon-pen-stem-shape",
-              "type": "path",
-              "name": "Pointed Pen Stem",
-              "start": {
-                "x": 11.36,
-                "y": 12.95
-              },
-              "closed": true,
-              "segments": [
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 11.45,
-                    "y": 14.9
-                  },
-                  "control2": {
-                    "x": 11.56,
-                    "y": 17.25
-                  },
-                  "to": {
-                    "x": 11.83,
-                    "y": 20.25
-                  }
-                },
-                {
-                  "type": "line",
-                  "to": {
-                    "x": 12,
-                    "y": 21.25
-                  }
-                },
-                {
-                  "type": "line",
-                  "to": {
-                    "x": 12.17,
-                    "y": 20.25
-                  }
-                },
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 12.44,
-                    "y": 17.25
-                  },
-                  "control2": {
-                    "x": 12.55,
-                    "y": 14.9
-                  },
-                  "to": {
-                    "x": 12.64,
-                    "y": 12.95
-                  }
-                },
-                {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 12.27,
-                    "y": 13.1
-                  },
-                  "control2": {
-                    "x": 11.73,
-                    "y": 13.1
-                  },
-                  "to": {
-                    "x": 11.36,
-                    "y": 12.95
-                  }
-                }
-              ],
-              "style": {
-                "fill": "#3b82f6",
-                "stroke": "none"
-              }
-            },
-            {
-              "id": "app-icon-pen-node",
-              "type": "circle",
-              "name": "Pen Round Node",
-              "cx": 12,
-              "cy": 11.944874338624338,
-              "r": 1.65,
-              "style": {
-                "fill": "#3b82f6",
-                "stroke": "none"
-              }
+              ]
             }
           ]
         },
         "comments": [],
         "background": {
-          "type": "solid",
-          "color": "#ffffff"
+          "type": "checkerboard",
+          "light": "#fafafa",
+          "dark": "#B0B0B0",
+          "size": 32
+        },
+        "resources": {
+          "gradients": [
+            {
+              "id": "app-icon-v-left-highlight-stroke-gradient",
+              "type": "radial",
+              "cx": 12,
+              "cy": 12,
+              "r": 12,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#686c6e"
+                },
+                {
+                  "offset": 0.5,
+                  "color": "#686c6e",
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "id": "app-icon-v-right-highlight-stroke-gradient",
+              "type": "radial",
+              "cx": 12,
+              "cy": 12,
+              "r": 12,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#3dbbff"
+                },
+                {
+                  "offset": 1,
+                  "color": "#2563ff"
+                }
+              ]
+            },
+            {
+              "id": "app-icon-v-left-gradient",
+              "type": "linear",
+              "x1": 4.5,
+              "y1": 4.5,
+              "x2": 12.8,
+              "y2": 19,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#69758b"
+                },
+                {
+                  "offset": 0.42,
+                  "color": "#343d4e"
+                },
+                {
+                  "offset": 1,
+                  "color": "#090f1b"
+                }
+              ]
+            },
+            {
+              "id": "app-icon-v-right-gradient",
+              "type": "linear",
+              "x1": 11,
+              "y1": 19,
+              "x2": 19,
+              "y2": 4.5,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#0633f6"
+                },
+                {
+                  "offset": 0.52,
+                  "color": "#087aff"
+                },
+                {
+                  "offset": 1,
+                  "color": "#1dc8f5"
+                }
+              ]
+            },
+            {
+              "id": "v-photo-blue-body",
+              "type": "linear",
+              "x1": 12.2,
+              "y1": 18.8,
+              "x2": 19.2,
+              "y2": 3,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#0824e8"
+                },
+                {
+                  "offset": 0.48,
+                  "color": "#075eff"
+                },
+                {
+                  "offset": 0.78,
+                  "color": "#079cf5"
+                },
+                {
+                  "offset": 1,
+                  "color": "#21d8ef"
+                }
+              ]
+            },
+            {
+              "id": "v-photo-blue-gloss",
+              "type": "radial",
+              "cx": 15.7,
+              "cy": 3.3,
+              "r": 15.5,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#b8ffff",
+                  "opacity": 0.38
+                },
+                {
+                  "offset": 0.25,
+                  "color": "#45e7ff",
+                  "opacity": 0.2
+                },
+                {
+                  "offset": 0.62,
+                  "color": "#1686ff",
+                  "opacity": 0.04
+                },
+                {
+                  "offset": 1,
+                  "color": "#0b35ff",
+                  "opacity": 0
+                }
+              ]
+            },
+            {
+              "id": "v-photo-dark-body",
+              "type": "linear",
+              "x1": 4.1,
+              "y1": 2.7,
+              "x2": 13.5,
+              "y2": 21,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#77849b"
+                },
+                {
+                  "offset": 0.18,
+                  "color": "#58657b"
+                },
+                {
+                  "offset": 0.48,
+                  "color": "#303a4c"
+                },
+                {
+                  "offset": 0.78,
+                  "color": "#141c2a"
+                },
+                {
+                  "offset": 1,
+                  "color": "#080f1a"
+                }
+              ]
+            },
+            {
+              "id": "v-photo-dark-gloss",
+              "type": "radial",
+              "cx": 4.5,
+              "cy": 2.8,
+              "r": 16.8,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#e1ebff",
+                  "opacity": 0.24
+                },
+                {
+                  "offset": 0.3,
+                  "color": "#9fb2d0",
+                  "opacity": 0.11
+                },
+                {
+                  "offset": 0.68,
+                  "color": "#2a3548",
+                  "opacity": 0.02
+                },
+                {
+                  "offset": 1,
+                  "color": "#0a101a",
+                  "opacity": 0
+                }
+              ]
+            }
+          ]
         }
       }
     },
@@ -1426,5 +2115,5 @@
     }
   ],
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-06-22T06:54:01.534Z"
+  "updatedAt": "2026-08-28T06:30:42.976Z"
 }

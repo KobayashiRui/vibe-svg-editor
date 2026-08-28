@@ -1,11 +1,11 @@
 {
-  "name": "glyphsmith",
+  "name": "vibesvg",
   "version": "0.1.2",
-  "description": "Agent-native SVG editor powered by Geometry AST and patch-based editing.",
+  "description": "Agent-native SVG editor for AI coding agents.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "glyphsmith": "dist/index.js"
+    "vibesvg": "dist/index.js"
   },
   "files": [
     "dist",
@@ -24,24 +24,27 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KobayashiRui/GlyphSmith.git",
+    "url": "git+https://github.com/KobayashiRui/vibe-svg-editor.git",
     "directory": "apps/cli"
   },
   "bugs": {
-    "url": "https://github.com/KobayashiRui/GlyphSmith/issues"
+    "url": "https://github.com/KobayashiRui/vibe-svg-editor/issues"
   },
-  "homepage": "https://github.com/KobayashiRui/GlyphSmith#readme",
+  "homepage": "https://github.com/KobayashiRui/vibe-svg-editor#readme",
   "scripts": {
     "build": "node ../../scripts/build-cli.mjs",
     "check-types": "tsc --noEmit",
     "dev": "pnpm run build && node dist/index.js host --example playground",
-    "dev:icons": "pnpm run build && node dist/index.js host --example glyphsmith",
+    "dev:icons": "pnpm run build && node dist/index.js host --example vibesvg",
     "prepack": "pnpm -w run build:cli"
   },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  },
   "devDependencies": {
-    "@glyphsmith/ast": "workspace:*",
-    "@glyphsmith/mcp": "workspace:*",
-    "@glyphsmith/svg": "workspace:*",
+    "@vibesvg/ast": "workspace:*",
+    "@vibesvg/mcp": "workspace:*",
+    "@vibesvg/svg": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^22",
     "hono": "^4.12.23",

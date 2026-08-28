@@ -1,11 +1,11 @@
 ---
-name: glyphsmith-mcp
-description: GlyphSmith MCP workflow guidance for active editor sessions, local host endpoints, resources, tools, page/document reads, patch application, selection-aware edits, SVG export, and project save behavior. Use when a running GlyphSmith CLI host or MCP endpoint is available.
+name: vibesvg-mcp
+description: VibeSVG MCP workflow guidance for active editor sessions, local host endpoints, resources, tools, page/document reads, patch application, selection-aware edits, SVG export, and project save behavior. Use when a running VibeSVG CLI host or MCP endpoint is available.
 ---
 
-# GlyphSmith MCP
+# VibeSVG MCP
 
-Use this skill when an active GlyphSmith editor session exposes a local MCP endpoint.
+Use this skill when an active VibeSVG editor session exposes a local MCP endpoint.
 
 ## Workflow
 
@@ -16,13 +16,13 @@ Use this skill when an active GlyphSmith editor session exposes a local MCP endp
 
 ## Rules
 
-* Do not regenerate a whole SVG when a patch is enough.
-* Do not edit raw SVG strings for active editor changes.
-* Treat `.gs.json` as an implementation detail while the GlyphSmith CLI host is active.
-* Do not directly edit `.gs.json` during active sessions. Use MCP tools so project revisions, autosave, and WebSocket clients stay synchronized.
-* Prefer page-scoped operations.
-* Keep comments as first-class instructions for agents.
-* Before drawing or editing generated artwork, read `glyphsmith://project` or call `project_get` and follow `project.projectPrompt` when present.
+- Do not regenerate a whole SVG when a patch is enough.
+- Do not edit raw SVG strings for active editor changes.
+- Treat `.vsvg.json` as an implementation detail while the VibeSVG CLI host is active.
+- Do not directly edit `.vsvg.json` during active sessions. Use MCP tools so project revisions, autosave, and WebSocket clients stay synchronized.
+- Prefer page-scoped operations.
+- Keep comments as first-class instructions for agents.
+- Before drawing or editing generated artwork, read `vibesvg://project` or call `project_get` and follow `project.projectPrompt` when present.
 
 ## Expected Local Host
 
@@ -44,26 +44,26 @@ Host:   ws://localhost:6202/ws
 MCP:    http://localhost:6202/mcp
 ```
 
-`pnpm run dev` opens `examples/playground.gs.json`.
-`pnpm run dev:icons` opens `examples/glyphsmith.gs.json`.
+`pnpm run dev` opens `examples/playground.vsvg.json`.
+`pnpm run dev:icons` opens `examples/vibesvg.vsvg.json`.
 
 Register the endpoint with local agents when needed.
 
 ```bash
-glyphsmith mcp install codex --url http://127.0.0.1:6202/mcp
-glyphsmith mcp install claude --url http://127.0.0.1:6202/mcp
+vibesvg mcp install codex --url http://127.0.0.1:6202/mcp
+vibesvg mcp install claude --url http://127.0.0.1:6202/mcp
 ```
 
 ## Resources
 
 ```txt
-glyphsmith://project
-glyphsmith://pages
-glyphsmith://active-document
-glyphsmith://document/{pageId}
-glyphsmith://comments
-glyphsmith://selection
-glyphsmith://skill-guide
+vibesvg://project
+vibesvg://pages
+vibesvg://active-document
+vibesvg://document/{pageId}
+vibesvg://comments
+vibesvg://selection
+vibesvg://skill-guide
 ```
 
 ## Tools
@@ -80,7 +80,12 @@ node_insert
 node_update
 node_delete
 node_move
+node_reorder
+node_reparent
 document_update
+document_render
+gradient_upsert
+gradient_delete
 path_create
 path_segment_append
 path_segment_update
@@ -97,21 +102,33 @@ project_save
 Use `patch_apply` with `dryRun: true` before risky geometry changes.
 Use `patches_apply` when drawing multiple shapes in one update.
 Use `node_insert`, `node_update`, `node_delete`, and `node_move` for simple create/edit/delete/move operations.
+Use `node_reorder` to change the stack position of an existing node in its current group. Index `0` is back-most; the last index is front-most.
+Use `node_reparent` to move an existing node into another group. Omit `index` to append it at the front of the destination group.
+Read `document_get` before choosing a layer index. The Layer UI is displayed in reverse order, so its top row corresponds to the final child in the AST.
+Use `document_render` after a meaningful visual change. It returns a PNG preview and metadata for the current revision without modifying the project. The default background is the document background; pass `background: "transparent"` when alpha needs to be inspected.
+Use `gradient_upsert` to create or replace a document gradient, then set a node's
+`style.fill` or `style.stroke` to `{ "type": "gradient", "gradientId": "<id>" }`.
+Use `gradient_delete` only after no node refers to that gradient.
+Use `node_update` or `patch_apply` to set `style.effects`. Effects are ordered
+high-level objects such as `{ "type": "blur", "radius": 6 }` and
+`{ "type": "dropShadow", "dx": 0, "dy": 8, "blur": 12, "color": "#000000" }`.
 Use `path_create` and `path_segment_*` for path drawing or segment-level curve edits.
 Use `node_insert` / `node_update` for `text` and `group` nodes as normal Geometry AST nodes.
 Pass `revision` when mutating if the current revision is known.
-`glyphsmith://selection` reflects the current editor selection when the web editor is connected to the CLI host.
+`vibesvg://selection` reflects the current editor selection when the web editor is connected to the CLI host.
 
 ## Drawing Workflow
 
 When asked to draw SVG content:
 
-1. Call `project_get` or read `glyphsmith://project` to check `projectPrompt` and revision.
+1. Call `project_get` or read `vibesvg://project` to check `projectPrompt` and revision.
 2. Call `document_get` to read the active document when needed.
 3. Use `document_update` if the requested canvas size differs.
 4. Use `patches_apply` or `node_insert` to add Geometry AST nodes.
-5. Re-read with `document_get`.
-6. Use `svg_export` when the user asks for SVG output.
+5. Use `document_render` to inspect composition, paint, effects, and layer order.
+6. Apply targeted patches for visual corrections, then render again when needed.
+7. Re-read with `document_get`.
+8. Use `svg_export` when the user asks for SVG output.
 
 Example `patches_apply` arguments:
 
@@ -179,6 +196,25 @@ Example edit arguments:
       "stroke": "#fff7ed",
       "strokeWidth": 6
     }
+  }
+}
+```
+
+Example gradient resource:
+
+```json
+{
+  "gradient": {
+    "id": "icon-blue",
+    "type": "linear",
+    "x1": 32,
+    "y1": 32,
+    "x2": 224,
+    "y2": 224,
+    "stops": [
+      { "offset": 0, "color": "#3DBBFF" },
+      { "offset": 1, "color": "#2563FF" }
+    ]
   }
 }
 ```

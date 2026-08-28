@@ -1,17 +1,17 @@
 ---
-name: glyphsmith-patch
-description: GlyphSmith patch operation guidance for targeted Geometry AST edits, node insert/update/delete/move patterns, path segment edits, groups, text, and patch-based SVG-equivalent drawing. Use when generating patches instead of rewriting documents.
+name: vibesvg-patch
+description: VibeSVG patch operation guidance for targeted Geometry AST edits, node insert/update/delete/move patterns, path segment edits, groups, text, and patch-based SVG-equivalent drawing. Use when generating patches instead of rewriting documents.
 ---
 
-# GlyphSmith Patch
+# VibeSVG Patch
 
-Use this skill when creating patch operations for GlyphSmith Geometry AST.
+Use this skill when creating patch operations for VibeSVG Geometry AST.
 
 ## Patch Principles
 
 Prefer targeted patches.
 
-During an active GlyphSmith editor/MCP session, apply patches through MCP tools instead of directly editing `.gs.json`. Direct project-file edits are an offline fallback only.
+During an active VibeSVG editor/MCP session, apply patches through MCP tools instead of directly editing `.vsvg.json`. Direct project-file edits are an offline fallback only.
 
 ```json
 {
@@ -100,6 +100,36 @@ Resize or rename a document with `updateDocument`.
 }
 ```
 
+## Layer Order
+
+Within a group, `children[0]` is the back-most layer and the final child is the
+front-most layer. New nodes without an `index` are appended to the front.
+
+Reorder an existing node within its current group with `reorder`:
+
+```json
+{
+  "op": "reorder",
+  "target": "highlight",
+  "index": 3
+}
+```
+
+Move an existing node to another group with `reparent`. Omit `index` to append
+it at the front of that group:
+
+```json
+{
+  "op": "reparent",
+  "target": "highlight",
+  "parentId": "badge-group",
+  "index": 0
+}
+```
+
+Read the current document and use its child order when choosing an index. Do
+not update a group's full `children` array merely to change its layer order.
+
 ## Drawing Nodes
 
 Use stable, unique ids. Prefer descriptive ids such as `sun-body`, `badge-shadow`, or `logo-mark-path`.
@@ -167,7 +197,7 @@ Text:
   "type": "text",
   "x": 256,
   "y": 448,
-  "text": "GlyphSmith\nIcon",
+  "text": "VibeSVG\nIcon",
   "fill": "#111827",
   "fontFamily": "Inter, system-ui, sans-serif",
   "fontSize": 32,
