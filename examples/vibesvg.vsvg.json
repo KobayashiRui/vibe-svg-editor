@@ -25,19 +25,39 @@
           "name": "Root",
           "children": [
             {
-              "id": "app-icon-v-left-shadow",
+              "id": "app-icon-v-left-highlight",
               "type": "line",
-              "name": "Dark arm depth shadow",
-              "x1": 5.52,
-              "y1": 5.93,
-              "x2": 12.2,
-              "y2": 18.63,
+              "name": "Dark arm soft highlight",
+              "x1": 5.032,
+              "y1": 5.262,
+              "x2": 11.682,
+              "y2": 17.962,
               "style": {
                 "fill": "none",
-                "stroke": "#202020",
-                "strokeWidth": 5.35,
+                "stroke": {
+                  "type": "gradient",
+                  "gradientId": "app-icon-v-left-highlight-stroke-gradient"
+                },
+                "strokeWidth": 3.75,
                 "strokeLinecap": "round",
-                "opacity": 0.5
+                "opacity": 0.22,
+                "effects": []
+              }
+            },
+            {
+              "id": "app-icon-v-right-highlight",
+              "type": "line",
+              "name": "Primary arm soft highlight",
+              "x1": 11.69,
+              "y1": 17.962,
+              "x2": 18.29,
+              "y2": 5.062,
+              "style": {
+                "fill": "none",
+                "stroke": "#3dbbff",
+                "strokeWidth": 3.75,
+                "strokeLinecap": "round",
+                "opacity": 0.62
               }
             },
             {
@@ -57,6 +77,27 @@
               }
             },
             {
+              "id": "app-icon-v-right",
+              "type": "line",
+              "name": "Primary V arm",
+              "x1": 11.9,
+              "y1": 18.25,
+              "x2": 18.5,
+              "y2": 5.35,
+              "style": {
+                "fill": "none",
+                "stroke": "#2f6fed",
+                "strokeWidth": 5.15,
+                "strokeLinecap": "round"
+              },
+              "transform": {
+                "originX": 15.2,
+                "originY": 11.8,
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            },
+            {
               "id": "app-icon-v-left",
               "type": "line",
               "name": "Dark V arm",
@@ -72,50 +113,19 @@
               }
             },
             {
-              "id": "app-icon-v-right",
+              "id": "app-icon-v-left-shadow",
               "type": "line",
-              "name": "Primary V arm",
-              "x1": 11.9,
-              "y1": 18.25,
-              "x2": 18.5,
-              "y2": 5.35,
+              "name": "Dark arm depth shadow",
+              "x1": 5.52,
+              "y1": 5.93,
+              "x2": 12.2,
+              "y2": 18.63,
               "style": {
                 "fill": "none",
-                "stroke": "#2f6fed",
-                "strokeWidth": 5.15,
-                "strokeLinecap": "round"
-              }
-            },
-            {
-              "id": "app-icon-v-left-highlight",
-              "type": "line",
-              "name": "Dark arm soft highlight",
-              "x1": 5.04,
-              "y1": 5.27,
-              "x2": 11.69,
-              "y2": 17.97,
-              "style": {
-                "fill": "none",
-                "stroke": "#f2f2f2",
-                "strokeWidth": 3.75,
+                "stroke": "#202020",
+                "strokeWidth": 5.35,
                 "strokeLinecap": "round",
-                "opacity": 0.22
-              }
-            },
-            {
-              "id": "app-icon-v-right-highlight",
-              "type": "line",
-              "name": "Primary arm soft highlight",
-              "x1": 11.69,
-              "y1": 17.97,
-              "x2": 18.29,
-              "y2": 5.07,
-              "style": {
-                "fill": "none",
-                "stroke": "#6ea4ff",
-                "strokeWidth": 3.75,
-                "strokeLinecap": "round",
-                "opacity": 0.62
+                "opacity": 0.5
               }
             }
           ]
@@ -124,6 +134,45 @@
         "background": {
           "type": "solid",
           "color": "#ffffff"
+        },
+        "resources": {
+          "gradients": [
+            {
+              "id": "app-icon-v-left-highlight-stroke-gradient",
+              "type": "radial",
+              "cx": 12,
+              "cy": 12,
+              "r": 12,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#686c6e"
+                },
+                {
+                  "offset": 0.5,
+                  "color": "#686c6e",
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "id": "app-icon-v-right-highlight-stroke-gradient",
+              "type": "radial",
+              "cx": 12,
+              "cy": 12,
+              "r": 12,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#3dbbff"
+                },
+                {
+                  "offset": 1,
+                  "color": "#2563ff"
+                }
+              ]
+            }
+          ]
         }
       }
     },
@@ -1321,5 +1370,5 @@
     }
   ],
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-08-27T12:25:15.445Z"
+  "updatedAt": "2026-08-28T04:24:18.261Z"
 }

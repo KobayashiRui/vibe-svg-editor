@@ -3,6 +3,7 @@ import {
   getDocumentViewBox,
   type GeometryDocument,
   type GeometryNode,
+  type Gradient,
   type VibeSVGPage,
   type VibeSVGProject,
   type PathNode,
@@ -189,6 +190,35 @@ export function mcpTools() {
           dryRun: { type: "boolean" },
         },
         required: ["changes"],
+      },
+    },
+    {
+      name: "gradient_upsert",
+      description:
+        "Create or replace a document-level linear or radial gradient resource.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pageId: { type: "string" },
+          gradient: { type: "object" },
+          revision: { type: "string" },
+          dryRun: { type: "boolean" },
+        },
+        required: ["gradient"],
+      },
+    },
+    {
+      name: "gradient_delete",
+      description: "Delete a document-level gradient resource by id.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pageId: { type: "string" },
+          gradientId: { type: "string" },
+          revision: { type: "string" },
+          dryRun: { type: "boolean" },
+        },
+        required: ["gradientId"],
       },
     },
     {
@@ -405,6 +435,10 @@ export function callMcpTool(
       return mcpText(nodeMoveTool(context, args));
     case "document_update":
       return mcpText(documentUpdateTool(context, args));
+    case "gradient_upsert":
+      return mcpText(gradientUpsertTool(context, args));
+    case "gradient_delete":
+      return mcpText(gradientDeleteTool(context, args));
     case "path_create":
       return mcpText(pathCreateTool(context, args));
     case "path_segment_append":
@@ -525,6 +559,27 @@ function documentUpdateTool(
           "background" | "name" | "width" | "height" | "viewBox"
         >
       >,
+    },
+  ]);
+}
+
+function gradientUpsertTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
+  return applyPatchOperations(context, args, [
+    { op: "gradientUpsert", gradient: requiredGradient(args.gradient) },
+  ]);
+}
+
+function gradientDeleteTool(
+  context: ToolContext,
+  args: Record<string, unknown>,
+) {
+  return applyPatchOperations(context, args, [
+    {
+      op: "gradientDelete",
+      gradientId: requiredString(args.gradientId, "gradientId"),
     },
   ]);
 }
@@ -1023,6 +1078,81 @@ function requiredPoint(value: unknown, name: string): Point {
     x: requiredNumber(point.x, `${name}.x`),
     y: requiredNumber(point.y, `${name}.y`),
   };
+}
+
+function requiredGradient(value: unknown): Gradient {
+  const gradient = requiredRecord(value, "gradient");
+  const id = requiredString(gradient.id, "gradient.id");
+  const stopsValue = gradient.stops;
+
+  if (!Array.isArray(stopsValue) || stopsValue.length === 0) {
+    throw new Error("gradient.stops must be a non-empty array.");
+  }
+
+  const stops = stopsValue.map((value, index) => {
+    const stop = requiredRecord(value, `gradient.stops[${index}]`);
+    const offset = requiredNumber(
+      stop.offset,
+      `gradient.stops[${index}].offset`,
+    );
+
+    if (offset < 0 || offset > 1) {
+      throw new Error(
+        `gradient.stops[${index}].offset must be from 0 through 1.`,
+      );
+    }
+
+    const opacity = optionalNumber(stop.opacity);
+
+    if (opacity !== undefined && (opacity < 0 || opacity > 1)) {
+      throw new Error(
+        `gradient.stops[${index}].opacity must be from 0 through 1.`,
+      );
+    }
+
+    return {
+      offset,
+      color: requiredString(stop.color, `gradient.stops[${index}].color`),
+      ...(opacity === undefined ? {} : { opacity }),
+    };
+  });
+
+  if (gradient.type === "linear") {
+    return {
+      id,
+      type: "linear",
+      x1: requiredNumber(gradient.x1, "gradient.x1"),
+      y1: requiredNumber(gradient.y1, "gradient.y1"),
+      x2: requiredNumber(gradient.x2, "gradient.x2"),
+      y2: requiredNumber(gradient.y2, "gradient.y2"),
+      stops,
+    };
+  }
+
+  if (gradient.type === "radial") {
+    const r = requiredNumber(gradient.r, "gradient.r");
+
+    if (r <= 0) {
+      throw new Error("gradient.r must be greater than zero.");
+    }
+
+    return {
+      id,
+      type: "radial",
+      cx: requiredNumber(gradient.cx, "gradient.cx"),
+      cy: requiredNumber(gradient.cy, "gradient.cy"),
+      r,
+      ...(optionalNumber(gradient.fx) === undefined
+        ? {}
+        : { fx: optionalNumber(gradient.fx)! }),
+      ...(optionalNumber(gradient.fy) === undefined
+        ? {}
+        : { fy: optionalNumber(gradient.fy)! }),
+      stops,
+    };
+  }
+
+  throw new Error("gradient.type must be linear or radial.");
 }
 
 function optionalString(value: unknown): string | undefined {

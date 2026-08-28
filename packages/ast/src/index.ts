@@ -19,7 +19,68 @@ export type ViewBox = {
   height: number;
 };
 
-export type Paint = string | "none";
+/** A semantic reference to a document-level gradient resource. */
+export type GradientPaint = {
+  type: "gradient";
+  gradientId: string;
+};
+
+/**
+ * A paint is deliberately not an SVG `url(#...)` string. Keeping the reference
+ * structured lets the editor, agents, and SVG exporter share one AST model.
+ */
+export type Paint = string | "none" | GradientPaint;
+
+export type GradientStop = {
+  /** Normalized gradient position from 0 through 1. */
+  offset: number;
+  color: string;
+  opacity?: number;
+};
+
+export type LinearGradient = {
+  id: string;
+  type: "linear";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  stops: GradientStop[];
+};
+
+export type RadialGradient = {
+  id: string;
+  type: "radial";
+  cx: number;
+  cy: number;
+  r: number;
+  fx?: number;
+  fy?: number;
+  stops: GradientStop[];
+};
+
+export type Gradient = LinearGradient | RadialGradient;
+
+export type DocumentResources = {
+  gradients: Gradient[];
+};
+
+/** High-level effects that map to standard SVG filter primitives. */
+export type BlurEffect = {
+  type: "blur";
+  radius: number;
+};
+
+export type DropShadowEffect = {
+  type: "dropShadow";
+  dx: number;
+  dy: number;
+  blur: number;
+  color: string;
+  opacity?: number;
+};
+
+export type Effect = BlurEffect | DropShadowEffect;
 
 export type StrokeLineCap = "butt" | "round" | "square";
 
@@ -40,6 +101,35 @@ export type NodeStyle = {
   strokeDasharray?: string;
   strokeDashoffset?: number;
   opacity?: number;
+  /** Ordered visual effects, rendered as a generated SVG filter. */
+  effects?: Effect[];
+};
+
+/**
+ * Structured affine transform for a node. Values are expressed in document
+ * coordinates; rotation is clockwise degrees in SVG/Canvas coordinates.
+ *
+ * `originX` and `originY` are persisted when a transform is first edited so
+ * later geometry changes do not unexpectedly move the rotation pivot.
+ */
+export type NodeTransform = {
+  translateX?: number;
+  translateY?: number;
+  rotation?: number;
+  scaleX?: number;
+  scaleY?: number;
+  originX?: number;
+  originY?: number;
+};
+
+/** A reusable geometry node used as an SVG-compatible clipping region. */
+export type ClipPathReference = {
+  nodeId: NodeId;
+};
+
+/** A reusable geometry node whose rendered alpha is used as an SVG mask. */
+export type MaskReference = {
+  nodeId: NodeId;
 };
 
 export type TextStyle = Pick<
@@ -72,6 +162,9 @@ export type BaseNode = {
   visible?: boolean;
   locked?: boolean;
   style?: NodeStyle;
+  transform?: NodeTransform;
+  clipPath?: ClipPathReference;
+  mask?: MaskReference;
 };
 
 export type GroupNode = BaseNode & {
@@ -214,6 +307,8 @@ export type GeometryDocument = {
   /** SVG user-coordinate range. When omitted, it is 0 0 width height. */
   viewBox?: ViewBox;
   background?: DocumentBackground;
+  /** SVG defs-equivalent resources. Absent in legacy documents. */
+  resources?: DocumentResources;
   root: GroupNode;
   comments: Comment[];
 };
@@ -278,12 +373,24 @@ export type UpdateDocumentPatch = {
   >;
 };
 
+export type GradientUpsertPatch = {
+  op: "gradientUpsert";
+  gradient: Gradient;
+};
+
+export type GradientDeletePatch = {
+  op: "gradientDelete";
+  gradientId: string;
+};
+
 export type PatchOperation =
   | InsertPatch
   | UpdatePatch
   | DeletePatch
   | MovePatch
-  | UpdateDocumentPatch;
+  | UpdateDocumentPatch
+  | GradientUpsertPatch
+  | GradientDeletePatch;
 
 export type Selection = {
   nodeIds: NodeId[];
@@ -296,6 +403,7 @@ export type CreateDocumentOptions = {
   width?: number;
   height?: number;
   viewBox?: ViewBox;
+  resources?: DocumentResources;
 };
 
 export type CreatePageOptions = CreateDocumentOptions & {
@@ -323,6 +431,7 @@ export function createDocument(
     height: options.height ?? 768,
     ...(options.viewBox ? { viewBox: { ...options.viewBox } } : {}),
     background: options.background,
+    resources: options.resources ?? { gradients: [] },
     root: {
       id: "root",
       type: "group",
@@ -342,6 +451,10 @@ export function getDocumentViewBox(document: GeometryDocument): ViewBox {
       height: document.height,
     }
   );
+}
+
+export function getDocumentGradients(document: GeometryDocument): Gradient[] {
+  return document.resources?.gradients ?? [];
 }
 
 export function createPage(options: CreatePageOptions = {}): VibeSVGPage {
@@ -392,9 +505,7 @@ export function createProject(
   };
 }
 
-export function isVibeSVGProject(
-  value: unknown,
-): value is VibeSVGProject {
+export function isVibeSVGProject(value: unknown): value is VibeSVGProject {
   if (!isRecord(value)) {
     return false;
   }
@@ -488,10 +599,74 @@ function isGeometryDocument(value: unknown): value is GeometryDocument {
     (!("viewBox" in value) ||
       value.viewBox === undefined ||
       isViewBox(value.viewBox)) &&
+    (!("resources" in value) ||
+      value.resources === undefined ||
+      isDocumentResources(value.resources)) &&
     value.root.type === "group" &&
     typeof value.root.id === "string" &&
     Array.isArray(value.root.children) &&
     Array.isArray(value.comments)
+  );
+}
+
+function isDocumentResources(value: unknown): value is DocumentResources {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.gradients) &&
+    value.gradients.every(isGradient)
+  );
+}
+
+function isGradient(value: unknown): value is Gradient {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    !Array.isArray(value.stops)
+  ) {
+    return false;
+  }
+
+  const validStops = value.stops.every(
+    (stop) =>
+      isRecord(stop) &&
+      typeof stop.offset === "number" &&
+      Number.isFinite(stop.offset) &&
+      stop.offset >= 0 &&
+      stop.offset <= 1 &&
+      typeof stop.color === "string" &&
+      (!("opacity" in stop) ||
+        stop.opacity === undefined ||
+        (typeof stop.opacity === "number" &&
+          Number.isFinite(stop.opacity) &&
+          stop.opacity >= 0 &&
+          stop.opacity <= 1)),
+  );
+
+  if (!validStops) {
+    return false;
+  }
+
+  if (value.type === "linear") {
+    return [value.x1, value.y1, value.x2, value.y2].every(
+      (coordinate) =>
+        typeof coordinate === "number" && Number.isFinite(coordinate),
+    );
+  }
+
+  return (
+    value.type === "radial" &&
+    typeof value.r === "number" &&
+    [value.cx, value.cy, value.r].every(
+      (coordinate) =>
+        typeof coordinate === "number" && Number.isFinite(coordinate),
+    ) &&
+    value.r > 0 &&
+    (!("fx" in value) ||
+      value.fx === undefined ||
+      (typeof value.fx === "number" && Number.isFinite(value.fx))) &&
+    (!("fy" in value) ||
+      value.fy === undefined ||
+      (typeof value.fy === "number" && Number.isFinite(value.fy)))
   );
 }
 

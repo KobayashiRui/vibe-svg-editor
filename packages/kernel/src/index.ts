@@ -1,6 +1,7 @@
 import type {
   GeometryDocument,
   GeometryNode,
+  Gradient,
   GroupNode,
   MovePatch,
   PatchOperation,
@@ -31,6 +32,17 @@ export function applyPatch(
             ? document.height
             : clampDimension(patch.changes.height),
         ...(viewBox ? { viewBox } : {}),
+      };
+    case "gradientUpsert":
+      return upsertGradient(document, patch.gradient);
+    case "gradientDelete":
+      return {
+        ...document,
+        resources: {
+          gradients: (document.resources?.gradients ?? []).filter(
+            (gradient) => gradient.id !== patch.gradientId,
+          ),
+        },
       };
     case "insert":
       return {
@@ -74,6 +86,26 @@ export function applyPatch(
         ) as GroupNode,
       };
   }
+}
+
+function upsertGradient(
+  document: GeometryDocument,
+  gradient: Gradient,
+): GeometryDocument {
+  const gradients = document.resources?.gradients ?? [];
+  const index = gradients.findIndex((current) => current.id === gradient.id);
+  const nextGradients = [...gradients];
+
+  if (index >= 0) {
+    nextGradients[index] = gradient;
+  } else {
+    nextGradients.push(gradient);
+  }
+
+  return {
+    ...document,
+    resources: { gradients: nextGradients },
+  };
 }
 
 function normalizeViewBox(viewBox: ViewBox): ViewBox {

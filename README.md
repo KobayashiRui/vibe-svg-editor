@@ -44,6 +44,14 @@ SVG
 
 VibeSVG is in early development. The current release is CLI-first and focuses on local editor sessions, project files, SVG export, and MCP-based agent workflows.
 
+## SVG Feature Support
+
+VibeSVG represents editable SVG concepts as structured Geometry AST data and generates SVG XML at import/export boundaries.
+
+Available today: geometry nodes and normalized paths, solid fill/stroke, linear and radial gradients, translate/rotate/scale transforms, geometry-referenced clip paths and alpha masks, plus blur and drop shadows.
+
+Next priorities are inner shadows, blend modes, additional high-level effects, pattern paints and markers, reusable symbols/instances, rich text runs, and stronger compatibility with external SVG transform/filter/mask syntax. Boolean Union / Subtract is deliberately deferred: it is a geometry-authoring operation, not a requirement for importing or editing ordinary SVG paths.
+
 ## Quick Start
 
 Install VibeSVG:

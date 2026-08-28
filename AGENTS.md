@@ -4,9 +4,9 @@ Agent-native SVG editor powered by Geometry AST and patch-based editing.
 
 VibeSVG is an open-source SVG editor designed for AI agents such as:
 
-* Codex
-* Claude Code
-* Gemini CLI
+- Codex
+- Claude Code
+- Gemini CLI
 
 The editor supports both manual editing and AI-driven editing using a shared Geometry AST.
 
@@ -44,8 +44,8 @@ AI agents generate patch operations that modify the Geometry AST.
 
 SVG is only used for:
 
-* Import
-* Export
+- Import
+- Export
 
 Internal editing must always operate on Geometry AST.
 
@@ -85,13 +85,13 @@ The Geometry Kernel performs actual geometry modifications.
 
 Examples:
 
-* Move
-* Rotate
-* Scale
-* Offset
-* Round Corner
-* Smooth
-* Mirror
+- Move
+- Rotate
+- Scale
+- Offset
+- Round Corner
+- Smooth
+- Mirror
 
 ---
 
@@ -99,9 +99,9 @@ Examples:
 
 Avoid introducing:
 
-* Semantic AST
-* DSL-first architecture
-* Complex reconstruction systems
+- Semantic AST
+- DSL-first architecture
+- Complex reconstruction systems
 
 Geometry AST is sufficient.
 
@@ -136,11 +136,11 @@ SvelteKit application.
 
 Responsibilities:
 
-* Editor UI
-* Canvas
-* Layer Tree
-* Properties Panel
-* Comments Panel
+- Editor UI
+- Canvas
+- Layer Tree
+- Properties Panel
+- Comments Panel
 
 The editor UI must remain reusable.
 
@@ -154,9 +154,9 @@ Primary entrypoint for v0.1.
 
 Launches:
 
-* Local Web UI
-* CLI Host Server
-* MCP Server
+- Local Web UI
+- CLI Host Server
+- MCP Server
 
 Example:
 
@@ -217,8 +217,8 @@ examples/vibesvg.vsvg.json
 
 When implementing editor features, verify functionality using both:
 
-* `examples/playground.vsvg.json`
-* `examples/vibesvg.vsvg.json`
+- `examples/playground.vsvg.json`
+- `examples/vibesvg.vsvg.json`
 
 Do not hardcode assumptions about a specific example project.
 
@@ -281,10 +281,10 @@ Contains Geometry AST definitions.
 
 Examples:
 
-* Document
-* Node
-* Segment
-* Patch
+- Document
+- Node
+- Segment
+- Patch
 
 No UI logic.
 
@@ -300,8 +300,8 @@ SVG ↔ Geometry AST
 
 Contains:
 
-* SVG Parser
-* SVG Exporter
+- SVG Parser
+- SVG Exporter
 
 ---
 
@@ -311,13 +311,18 @@ Geometry engine.
 
 Responsible for geometry operations such as:
 
-* Offset
-* Round Corner
-* Smooth
-* Mirror
-* Future Boolean Operations
+- Offset
+- Round Corner
+- Smooth
+- Mirror
+- Deferred Boolean Operations
 
 No UI code.
+
+Boolean operations are a geometry-authoring convenience, not an SVG
+import/export compatibility requirement. Defer them until a concrete editor
+workflow needs them; imported SVG paths must remain editable without Boolean
+support.
 
 ---
 
@@ -327,11 +332,11 @@ Reusable editor components.
 
 Examples:
 
-* Canvas
-* Selection
-* Transform Handles
-* Comments
-* Viewport
+- Canvas
+- Selection
+- Transform Handles
+- Comments
+- Viewport
 
 Should remain framework-independent where practical.
 
@@ -343,39 +348,41 @@ MCP server implementation.
 
 Exposed resources:
 
-* vibesvg://project
-* vibesvg://pages
-* vibesvg://active-document
-* vibesvg://document/{pageId}
-* vibesvg://comments
-* vibesvg://selection
-* vibesvg://skill-guide
+- vibesvg://project
+- vibesvg://pages
+- vibesvg://active-document
+- vibesvg://document/{pageId}
+- vibesvg://comments
+- vibesvg://selection
+- vibesvg://skill-guide
 
 Exposed tools:
 
-* project_get
-* pages_list
-* document_get
-* selection_get
-* comments_get
-* patch_apply
-* patches_apply
-* node_insert
-* node_update
-* node_delete
-* node_move
-* document_update
-* path_create
-* path_segment_append
-* path_segment_update
-* path_segment_delete
-* path_set_closed
-* page_add
-* page_duplicate
-* page_delete
-* page_set_active
-* svg_export
-* project_save
+- project_get
+- pages_list
+- document_get
+- selection_get
+- comments_get
+- patch_apply
+- patches_apply
+- node_insert
+- node_update
+- node_delete
+- node_move
+- document_update
+- gradient_upsert
+- gradient_delete
+- path_create
+- path_segment_append
+- path_segment_update
+- path_segment_delete
+- path_set_closed
+- page_add
+- page_duplicate
+- page_delete
+- page_set_active
+- svg_export
+- project_save
 
 Mutation tools should accept `revision` when possible and should support `dryRun` for edits that can be previewed.
 MCP mutations must write through the CLI ProjectStore so WebSocket clients receive project snapshot updates.
@@ -406,11 +413,11 @@ Skills are markdown-based references used by AI agents.
 
 Examples:
 
-* SVG import rules
-* Geometry AST rules
-* Patch operation patterns
-* MCP usage patterns
-* UI conventions
+- SVG import rules
+- Geometry AST rules
+- Patch operation patterns
+- MCP usage patterns
+- UI conventions
 
 Keep skills focused and small.
 
@@ -441,15 +448,15 @@ The bottom page strip should show page thumbnails rendered from each page's Geom
 
 Supported nodes:
 
-* GroupNode
-* PathNode
-* RectNode
-* CircleNode
-* EllipseNode
-* PolygonNode
-* PolylineNode
-* LineNode
-* TextNode
+- GroupNode
+- PathNode
+- RectNode
+- CircleNode
+- EllipseNode
+- PolygonNode
+- PolylineNode
+- LineNode
+- TextNode
 
 ---
 
@@ -463,13 +470,13 @@ Example:
 
 ```ts
 type PathNode = {
-  id: string
-  type: "path"
+  id: string;
+  type: "path";
 
-  closed: boolean
+  closed: boolean;
 
-  segments: Segment[]
-}
+  segments: Segment[];
+};
 ```
 
 ---
@@ -478,10 +485,10 @@ type PathNode = {
 
 Supported:
 
-* LineSegment
-* CubicBezierSegment
-* QuadraticBezierSegment
-* ArcSegment
+- LineSegment
+- CubicBezierSegment
+- QuadraticBezierSegment
+- ArcSegment
 
 The Geometry AST should be geometry-oriented rather than SVG-string-oriented.
 
@@ -494,19 +501,19 @@ The `text` value may include `\n` line breaks.
 
 ```ts
 type TextNode = {
-  id: string
-  type: "text"
-  x: number
-  y: number
-  text: string
+  id: string;
+  type: "text";
+  x: number;
+  y: number;
+  text: string;
 
-  fontFamily?: string
-  fontSize?: number
-  fontWeight?: string | number
-  fontStyle?: "normal" | "italic"
-  textAnchor?: "start" | "middle" | "end"
-  dominantBaseline?: string
-}
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string | number;
+  fontStyle?: "normal" | "italic";
+  textAnchor?: "start" | "middle" | "end";
+  dominantBaseline?: string;
+};
 ```
 
 Future `tspan` and rich text support should extend `TextNode` with optional `runs`.
@@ -514,23 +521,53 @@ Do not remove or replace `text`; keep it as the backward-compatible plain text v
 
 ```ts
 type TextRun = {
-  text: string
-  dx?: number
-  dy?: number
-  x?: number
-  y?: number
-  style?: Partial<TextStyle>
-}
+  text: string;
+  dx?: number;
+  dy?: number;
+  x?: number;
+  y?: number;
+  style?: Partial<TextStyle>;
+};
 ```
 
 Import/export rules:
 
-* `<text>Text</text>` maps to `TextNode.text`.
-* Line breaks in `TextNode.text` are rendered as multiple canvas text lines.
-* Line breaks in `TextNode.text` are exported as `<tspan>` lines so SVG output preserves multiline text.
-* `<text><tspan>...</tspan></text>` may later map to `TextNode.runs`; v0.1 may flatten simple `<tspan>` lines into `TextNode.text` with `\n`.
-* When `runs` is absent and `text` has no line breaks, export a single `<text>` element.
-* When `runs` is present, export `<text>` with `<tspan>` children.
+- `<text>Text</text>` maps to `TextNode.text`.
+- Line breaks in `TextNode.text` are rendered as multiple canvas text lines.
+- Line breaks in `TextNode.text` are exported as `<tspan>` lines so SVG output preserves multiline text.
+- `<text><tspan>...</tspan></text>` may later map to `TextNode.runs`; v0.1 may flatten simple `<tspan>` lines into `TextNode.text` with `\n`.
+- When `runs` is absent and `text` has no line breaks, export a single `<text>` element.
+- When `runs` is present, export `<text>` with `<tspan>` children.
+
+## SVG Feature Scope
+
+VibeSVG should support practical SVG authoring through structured Geometry AST
+data. Do not add raw SVG XML, raw `transform` strings, or raw filter primitive
+arrays to the AST just to mirror SVG syntax. GUI, agents, and Macro JS must
+edit the same high-level fields and resources.
+
+Currently supported SVG-oriented capabilities:
+
+- Geometry nodes, normalized path segments, groups, and plain multiline text
+- Solid fill and stroke, including standard stroke width, cap, join, and dash settings
+- Linear and radial gradients with gradient stops, usable for fill and stroke
+- Translate, rotate, and scale transforms with a stable optional transform origin
+- Geometry-node-referenced clip paths and alpha masks
+- High-level blur and drop-shadow effects
+
+Prioritize the following remaining SVG capabilities as structured AST features:
+
+1. Inner shadow and blend mode/isolation
+2. Additional high-level filter effects, mapped to SVG filter primitives only at export
+3. Pattern paint, markers, and other commonly authored paint/stroke settings
+4. Reusable symbols and instances (`<symbol>` / `<use>`)
+5. Rich text runs / `<tspan>` editing
+6. Broader SVG import/export compatibility for common transform, filter, mask, and unit forms
+7. Image nodes and other SVG elements when they have a clear Geometry AST representation
+
+Boolean Union / Subtract is intentionally outside this SVG-capability roadmap
+for now. SVG stores the result as ordinary paths, so it is not required to
+import, render, export, or edit existing SVG artwork.
 
 ---
 
@@ -602,9 +639,19 @@ Choose the simpler architecture.
 
 Keep these as follow-up tasks unless the user explicitly asks to implement them:
 
-* Optimize page thumbnail rendering so only changed pages redraw.
-* Add page rename and drag-to-reorder in the bottom page strip.
-* Add project-level dirty-state handling for `.vsvg.json`.
-* Add a UI affordance to copy the current MCP URL and install commands.
-* Add authenticated MCP mode for non-default deployment contexts.
-* Preserve project/page metadata when importing or exporting multiple SVG files.
+## SVG Capability Roadmap
+
+- Add high-level Inner Shadow and Blend Mode / isolation controls.
+- Add advanced, composable effects without exposing raw filter primitives in the AST.
+- Add Pattern paints, markers, reusable symbols/instances, and rich text runs as their AST designs are defined.
+- Strengthen import/export compatibility for external SVG transform, filter, mask, and unit syntax.
+- Consider Boolean operations only as a future Geometry Kernel authoring tool; they are not an SVG compatibility blocker.
+
+## Product and Infrastructure Follow-ups
+
+- Optimize page thumbnail rendering so only changed pages redraw.
+- Add page rename and drag-to-reorder in the bottom page strip.
+- Add project-level dirty-state handling for `.vsvg.json`.
+- Add a UI affordance to copy the current MCP URL and install commands.
+- Add authenticated MCP mode for non-default deployment contexts.
+- Preserve project/page metadata when importing or exporting multiple SVG files.

@@ -16,13 +16,13 @@ Use this skill when an active VibeSVG editor session exposes a local MCP endpoin
 
 ## Rules
 
-* Do not regenerate a whole SVG when a patch is enough.
-* Do not edit raw SVG strings for active editor changes.
-* Treat `.vsvg.json` as an implementation detail while the VibeSVG CLI host is active.
-* Do not directly edit `.vsvg.json` during active sessions. Use MCP tools so project revisions, autosave, and WebSocket clients stay synchronized.
-* Prefer page-scoped operations.
-* Keep comments as first-class instructions for agents.
-* Before drawing or editing generated artwork, read `vibesvg://project` or call `project_get` and follow `project.projectPrompt` when present.
+- Do not regenerate a whole SVG when a patch is enough.
+- Do not edit raw SVG strings for active editor changes.
+- Treat `.vsvg.json` as an implementation detail while the VibeSVG CLI host is active.
+- Do not directly edit `.vsvg.json` during active sessions. Use MCP tools so project revisions, autosave, and WebSocket clients stay synchronized.
+- Prefer page-scoped operations.
+- Keep comments as first-class instructions for agents.
+- Before drawing or editing generated artwork, read `vibesvg://project` or call `project_get` and follow `project.projectPrompt` when present.
 
 ## Expected Local Host
 
@@ -81,6 +81,8 @@ node_update
 node_delete
 node_move
 document_update
+gradient_upsert
+gradient_delete
 path_create
 path_segment_append
 path_segment_update
@@ -97,6 +99,12 @@ project_save
 Use `patch_apply` with `dryRun: true` before risky geometry changes.
 Use `patches_apply` when drawing multiple shapes in one update.
 Use `node_insert`, `node_update`, `node_delete`, and `node_move` for simple create/edit/delete/move operations.
+Use `gradient_upsert` to create or replace a document gradient, then set a node's
+`style.fill` or `style.stroke` to `{ "type": "gradient", "gradientId": "<id>" }`.
+Use `gradient_delete` only after no node refers to that gradient.
+Use `node_update` or `patch_apply` to set `style.effects`. Effects are ordered
+high-level objects such as `{ "type": "blur", "radius": 6 }` and
+`{ "type": "dropShadow", "dx": 0, "dy": 8, "blur": 12, "color": "#000000" }`.
 Use `path_create` and `path_segment_*` for path drawing or segment-level curve edits.
 Use `node_insert` / `node_update` for `text` and `group` nodes as normal Geometry AST nodes.
 Pass `revision` when mutating if the current revision is known.
@@ -179,6 +187,25 @@ Example edit arguments:
       "stroke": "#fff7ed",
       "strokeWidth": 6
     }
+  }
+}
+```
+
+Example gradient resource:
+
+```json
+{
+  "gradient": {
+    "id": "icon-blue",
+    "type": "linear",
+    "x1": 32,
+    "y1": 32,
+    "x2": 224,
+    "y2": 224,
+    "stops": [
+      { "offset": 0, "color": "#3DBBFF" },
+      { "offset": 1, "color": "#2563FF" }
+    ]
   }
 }
 ```

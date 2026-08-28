@@ -1,20 +1,28 @@
 import {
   createDocument,
+  getDocumentGradients,
   getDocumentViewBox,
+  type Effect,
+  type Gradient,
   type GeometryDocument,
   type GeometryNode,
   type NodeStyle,
+  type NodeTransform,
   type Point,
   type Segment,
   type ViewBox,
 } from "@vibesvg/ast";
 
 export function exportToSvg(document: GeometryDocument): string {
-  const children = document.root.children.map(renderNode).join("");
+  const children = document.root.children
+    .map((node) => renderNode(node, document))
+    .join("");
   const viewBox = getDocumentViewBox(document);
+  const defs = renderDefs(document);
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${formatNumber(document.width)}" height="${formatNumber(document.height)}" viewBox="${formatNumber(viewBox.x)} ${formatNumber(viewBox.y)} ${formatNumber(viewBox.width)} ${formatNumber(viewBox.height)}">`,
+    defs,
     children,
     "</svg>",
   ].join("");
@@ -76,7 +84,20 @@ export function importFromSvg(svgText: string): GeometryDocument {
       return id;
     },
   };
-  const children = parseSvgChildren(svg, context, parseNodeStyle(svg, {}));
+  const gradients = parseGradients(svg);
+  const gradientIds = new Set(gradients.map((gradient) => gradient.id));
+  const effectsByFilterId = parseEffects(svg);
+  const clipPathsById = parseClipPaths(svg);
+  const masksById = parseMasks(svg);
+  const children = parseSvgChildren(
+    svg,
+    context,
+    parseNodeStyle(svg, {}, gradientIds, effectsByFilterId),
+    gradientIds,
+    effectsByFilterId,
+    clipPathsById,
+    masksById,
+  );
   const document = createDocument({
     id: context.nextId("document"),
     name:
@@ -84,6 +105,7 @@ export function importFromSvg(svgText: string): GeometryDocument {
     width,
     height,
     viewBox,
+    resources: { gradients },
   });
 
   return {
@@ -117,11 +139,25 @@ function parseSvgChildren(
   parent: Element,
   context: SvgImportContext,
   inheritedStyle: NodeStyle,
+  gradientIds: Set<string>,
+  effectsByFilterId: Map<string, Effect[]>,
+  clipPathsById: Map<string, string>,
+  masksById: Map<string, string>,
 ): GeometryNode[] {
   const nodes: GeometryNode[] = [];
 
   for (const child of parent.children) {
-    nodes.push(...parseSvgElement(child, context, inheritedStyle));
+    nodes.push(
+      ...parseSvgElement(
+        child,
+        context,
+        inheritedStyle,
+        gradientIds,
+        effectsByFilterId,
+        clipPathsById,
+        masksById,
+      ),
+    );
   }
 
   return nodes;
@@ -131,6 +167,10 @@ function parseSvgElement(
   element: Element,
   context: SvgImportContext,
   inheritedStyle: NodeStyle,
+  gradientIds: Set<string>,
+  effectsByFilterId: Map<string, Effect[]>,
+  clipPathsById: Map<string, string>,
+  masksById: Map<string, string>,
 ): GeometryNode[] {
   const tagName = element.localName.toLowerCase();
 
@@ -143,15 +183,30 @@ function parseSvgElement(
     return [];
   }
 
-  const style = parseNodeStyle(element, inheritedStyle);
+  const style = parseNodeStyle(
+    element,
+    inheritedStyle,
+    gradientIds,
+    effectsByFilterId,
+  );
   const name =
     element.getAttribute("data-name") ??
     element.getAttribute("aria-label") ??
     undefined;
+  const transform = parseTransform(element.getAttribute("transform"));
+  const clipNodeId = clipPathsById.get(
+    parseClipPathReference(element.getAttribute("clip-path")),
+  );
+  const maskNodeId = masksById.get(
+    parseMaskReference(element.getAttribute("mask")),
+  );
   const common = {
     id: context.reserveId(element.getAttribute("id"), tagName),
     name,
     style,
+    ...(transform ? { transform } : {}),
+    ...(clipNodeId ? { clipPath: { nodeId: clipNodeId } } : {}),
+    ...(maskNodeId ? { mask: { nodeId: maskNodeId } } : {}),
   };
 
   switch (tagName) {
@@ -161,7 +216,15 @@ function parseSvgElement(
         {
           ...common,
           type: "group",
-          children: parseSvgChildren(element, context, style),
+          children: parseSvgChildren(
+            element,
+            context,
+            style,
+            gradientIds,
+            effectsByFilterId,
+            clipPathsById,
+            masksById,
+          ),
         },
       ];
     }
@@ -308,6 +371,8 @@ function parseSvgElement(
 function parseNodeStyle(
   element: Element,
   inheritedStyle: NodeStyle,
+  gradientIds: Set<string>,
+  effectsByFilterId: Map<string, Effect[]>,
 ): NodeStyle {
   const inlineStyle = parseInlineStyle(element.getAttribute("style"));
   const style: NodeStyle = {
@@ -325,13 +390,14 @@ function parseNodeStyle(
   const strokeDasharray = read("stroke-dasharray");
   const strokeDashoffset = read("stroke-dashoffset");
   const opacity = read("opacity");
+  const filter = read("filter");
 
   if (fill) {
-    style.fill = fill;
+    style.fill = parsePaint(fill, gradientIds);
   }
 
   if (stroke) {
-    style.stroke = stroke;
+    style.stroke = parsePaint(stroke, gradientIds);
   }
 
   if (strokeWidth) {
@@ -374,7 +440,202 @@ function parseNodeStyle(
     style.opacity = parseLength(opacity) ?? style.opacity;
   }
 
+  const effects = filter
+    ? effectsByFilterId.get(parseFilterReference(filter))
+    : undefined;
+
+  if (effects) {
+    style.effects = effects.map((effect) => ({ ...effect }));
+  }
+
   return style;
+}
+
+function parseFilterReference(value: string): string {
+  return value.trim().match(/^url\(#([^)]+)\)$/)?.[1] ?? "";
+}
+
+function parseClipPathReference(value: string | null): string {
+  return value?.trim().match(/^url\(#([^)]+)\)$/)?.[1] ?? "";
+}
+
+function parseMaskReference(value: string | null): string {
+  return value?.trim().match(/^url\(#([^)]+)\)$/)?.[1] ?? "";
+}
+
+function parseClipPaths(svg: Element): Map<string, string> {
+  const clipPaths = new Map<string, string>();
+
+  for (const clipPath of Array.from(svg.querySelectorAll("defs clipPath"))) {
+    const id = clipPath.getAttribute("id")?.trim();
+    const use = clipPath.querySelector(":scope > use");
+    const nodeId = use
+      ?.getAttribute("href")
+      ?.trim()
+      .match(/^#(.+)$/)?.[1];
+
+    if (id && nodeId) {
+      clipPaths.set(id, nodeId);
+    }
+  }
+
+  return clipPaths;
+}
+
+function parseMasks(svg: Element): Map<string, string> {
+  const masks = new Map<string, string>();
+
+  for (const mask of Array.from(svg.querySelectorAll("defs mask"))) {
+    const id = mask.getAttribute("id")?.trim();
+    const use = mask.querySelector(":scope > use");
+    const nodeId = use
+      ?.getAttribute("href")
+      ?.trim()
+      .match(/^#(.+)$/)?.[1];
+
+    if (id && nodeId) {
+      masks.set(id, nodeId);
+    }
+  }
+
+  return masks;
+}
+
+function parseEffects(svg: Element): Map<string, Effect[]> {
+  const filters = new Map<string, Effect[]>();
+
+  for (const filter of Array.from(svg.querySelectorAll("defs filter"))) {
+    const id = filter.getAttribute("id")?.trim();
+
+    if (!id) {
+      continue;
+    }
+
+    const effects: Effect[] = [];
+    for (const primitive of Array.from(filter.children)) {
+      if (primitive.localName === "feGaussianBlur") {
+        const radius = parseLength(primitive.getAttribute("stdDeviation"));
+
+        if (radius !== undefined && radius >= 0) {
+          effects.push({ type: "blur", radius });
+        }
+      }
+
+      if (primitive.localName === "feDropShadow") {
+        const blur = parseLength(primitive.getAttribute("stdDeviation"));
+        const dx = parseLength(primitive.getAttribute("dx"));
+        const dy = parseLength(primitive.getAttribute("dy"));
+        const color = styleValue(primitive, "flood-color") ?? "#000000";
+        const opacity = parseLength(
+          styleValue(primitive, "flood-opacity") ?? null,
+        );
+
+        if (
+          blur !== undefined &&
+          dx !== undefined &&
+          dy !== undefined &&
+          blur >= 0
+        ) {
+          effects.push({
+            type: "dropShadow",
+            dx,
+            dy,
+            blur,
+            color,
+            ...(opacity === undefined ? {} : { opacity: clamp(opacity, 0, 1) }),
+          });
+        }
+      }
+    }
+
+    if (effects.length) {
+      filters.set(id, effects);
+    }
+  }
+
+  return filters;
+}
+
+function parsePaint(value: string, gradientIds: Set<string>) {
+  const match = value.trim().match(/^url\(#([^)]+)\)$/);
+
+  return match && gradientIds.has(match[1]!)
+    ? { type: "gradient" as const, gradientId: match[1]! }
+    : value;
+}
+
+function parseGradients(svg: Element): Gradient[] {
+  const gradients: Gradient[] = [];
+
+  for (const element of Array.from(
+    svg.querySelectorAll("defs linearGradient, defs radialGradient"),
+  )) {
+    const id = element.getAttribute("id")?.trim();
+    const stops = Array.from(element.querySelectorAll(":scope > stop"))
+      .map((stop) => {
+        const offset = parseGradientOffset(stop.getAttribute("offset"));
+        const color = styleValue(stop, "stop-color") ?? "#000000";
+        const opacity = parseLength(styleValue(stop, "stop-opacity") ?? null);
+
+        return offset === undefined
+          ? undefined
+          : {
+              offset,
+              color,
+              ...(opacity === undefined
+                ? {}
+                : { opacity: clamp(opacity, 0, 1) }),
+            };
+      })
+      .filter((stop): stop is NonNullable<typeof stop> => Boolean(stop));
+
+    if (!id || stops.length === 0) {
+      continue;
+    }
+
+    if (element.localName === "linearGradient") {
+      gradients.push({
+        id,
+        type: "linear",
+        x1: parseLength(element.getAttribute("x1")) ?? 0,
+        y1: parseLength(element.getAttribute("y1")) ?? 0,
+        x2: parseLength(element.getAttribute("x2")) ?? 1,
+        y2: parseLength(element.getAttribute("y2")) ?? 0,
+        stops,
+      });
+      continue;
+    }
+
+    gradients.push({
+      id,
+      type: "radial",
+      cx: parseLength(element.getAttribute("cx")) ?? 0.5,
+      cy: parseLength(element.getAttribute("cy")) ?? 0.5,
+      r: parseLength(element.getAttribute("r")) ?? 0.5,
+      ...(parseLength(element.getAttribute("fx")) === undefined
+        ? {}
+        : { fx: parseLength(element.getAttribute("fx"))! }),
+      ...(parseLength(element.getAttribute("fy")) === undefined
+        ? {}
+        : { fy: parseLength(element.getAttribute("fy"))! }),
+      stops,
+    });
+  }
+
+  return gradients;
+}
+
+function parseGradientOffset(value: string | null): number | undefined {
+  if (!value) {
+    return 0;
+  }
+
+  const trimmed = value.trim();
+  const percentage = trimmed.endsWith("%")
+    ? Number(trimmed.slice(0, -1)) / 100
+    : Number(trimmed);
+
+  return Number.isFinite(percentage) ? clamp(percentage, 0, 1) : undefined;
 }
 
 function parseInlineStyle(style: string | null): Map<string, string> {
@@ -755,16 +1016,16 @@ function parseNumberList(value: string | null): number[] {
   );
 }
 
-function renderNode(node: GeometryNode): string {
+function renderNode(node: GeometryNode, document: GeometryDocument): string {
   if (node.visible === false) {
     return "";
   }
 
-  const common = `${renderId(node.id)}${renderName(node.name)}${renderStyle(node.style)}`;
+  const common = `${renderId(node.id)}${renderName(node.name)}${renderStyle(node.style)}${renderTransform(node.transform)}${renderClipPathAttribute(node)}${renderMaskAttribute(node)}${renderEffectAttribute(node.id, node.style?.effects)}`;
 
   switch (node.type) {
     case "group":
-      return `<g${common}>${node.children.map(renderNode).join("")}</g>`;
+      return `<g${common}>${node.children.map((child) => renderNode(child, document)).join("")}</g>`;
     case "rect":
       return `<rect${common} x="${formatNumber(node.x)}" y="${formatNumber(node.y)}" width="${formatNumber(node.width)}" height="${formatNumber(node.height)}"${optionalNumber("rx", node.rx)}${optionalNumber("ry", node.ry)} />`;
     case "circle":
@@ -784,9 +1045,144 @@ function renderNode(node: GeometryNode): string {
   }
 }
 
+function renderDefs(document: GeometryDocument): string {
+  const gradients = getDocumentGradients(document);
+  const effectNodes = collectEffectNodes(document.root);
+  const clipPathNodes = collectClipPathNodes(document.root);
+  const maskNodes = collectMaskNodes(document.root);
+
+  if (
+    !gradients.length &&
+    !effectNodes.length &&
+    !clipPathNodes.length &&
+    !maskNodes.length
+  ) {
+    return "";
+  }
+
+  const viewBox = getDocumentViewBox(document);
+  return `<defs>${gradients.map(renderGradient).join("")}${clipPathNodes.map(renderClipPath).join("")}${maskNodes.map(renderMask).join("")}${effectNodes.map((node) => renderFilter(node.id, node.effects, viewBox)).join("")}</defs>`;
+}
+
+function collectClipPathNodes(node: GeometryNode): GeometryNode[] {
+  const result =
+    node.clipPath?.nodeId && node.clipPath.nodeId !== node.id ? [node] : [];
+
+  if (node.type === "group") {
+    return [...result, ...node.children.flatMap(collectClipPathNodes)];
+  }
+
+  return result;
+}
+
+function renderClipPath(node: GeometryNode): string {
+  return `<clipPath id="${escapeAttribute(clipPathId(node.id))}"><use href="#${escapeAttribute(node.clipPath!.nodeId)}" /></clipPath>`;
+}
+
+function renderClipPathAttribute(node: GeometryNode): string {
+  return node.clipPath?.nodeId && node.clipPath.nodeId !== node.id
+    ? ` clip-path="url(#${escapeAttribute(clipPathId(node.id))})"`
+    : "";
+}
+
+function clipPathId(nodeId: string): string {
+  return `vibesvg-clip-${nodeId}`;
+}
+
+function collectMaskNodes(node: GeometryNode): GeometryNode[] {
+  const result =
+    node.mask?.nodeId && node.mask.nodeId !== node.id ? [node] : [];
+
+  if (node.type === "group") {
+    return [...result, ...node.children.flatMap(collectMaskNodes)];
+  }
+
+  return result;
+}
+
+function renderMask(node: GeometryNode): string {
+  return `<mask id="${escapeAttribute(maskId(node.id))}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" mask-type="alpha"><use href="#${escapeAttribute(node.mask!.nodeId)}" /></mask>`;
+}
+
+function renderMaskAttribute(node: GeometryNode): string {
+  return node.mask?.nodeId && node.mask.nodeId !== node.id
+    ? ` mask="url(#${escapeAttribute(maskId(node.id))})"`
+    : "";
+}
+
+function maskId(nodeId: string): string {
+  return `vibesvg-mask-${nodeId}`;
+}
+
+function collectEffectNodes(
+  node: GeometryNode,
+): Array<{ id: string; effects: Effect[] }> {
+  const result = node.style?.effects?.length
+    ? [{ id: node.id, effects: node.style.effects }]
+    : [];
+
+  if (node.type === "group") {
+    return [...result, ...node.children.flatMap(collectEffectNodes)];
+  }
+
+  return result;
+}
+
+function renderEffectAttribute(
+  id: string,
+  effects: Effect[] | undefined,
+): string {
+  return effects?.length
+    ? ` filter="url(#${escapeAttribute(effectFilterId(id))})"`
+    : "";
+}
+
+function renderFilter(id: string, effects: Effect[], viewBox: ViewBox): string {
+  const padding = effects.reduce((maximum, effect) => {
+    const extent =
+      effect.type === "blur"
+        ? effect.radius * 3
+        : Math.max(Math.abs(effect.dx), Math.abs(effect.dy)) + effect.blur * 3;
+    return Math.max(maximum, extent);
+  }, 0);
+  let input = "SourceGraphic";
+  const primitives = effects
+    .map((effect, index) => {
+      const result = `effect-${index}`;
+      const primitive =
+        effect.type === "blur"
+          ? `<feGaussianBlur in="${input}" stdDeviation="${formatNumber(Math.max(0, effect.radius))}" result="${result}" />`
+          : `<feDropShadow in="${input}" dx="${formatNumber(effect.dx)}" dy="${formatNumber(effect.dy)}" stdDeviation="${formatNumber(Math.max(0, effect.blur))}" flood-color="${escapeAttribute(effect.color)}"${effect.opacity === undefined ? "" : ` flood-opacity="${formatNumber(effect.opacity)}"`} result="${result}" />`;
+      input = result;
+      return primitive;
+    })
+    .join("");
+
+  return `<filter id="${escapeAttribute(effectFilterId(id))}" filterUnits="userSpaceOnUse" x="${formatNumber(viewBox.x - padding)}" y="${formatNumber(viewBox.y - padding)}" width="${formatNumber(viewBox.width + padding * 2)}" height="${formatNumber(viewBox.height + padding * 2)}">${primitives}</filter>`;
+}
+
+function effectFilterId(nodeId: string): string {
+  return `vibesvg-effect-${nodeId}`;
+}
+
+function renderGradient(gradient: Gradient): string {
+  const stops = gradient.stops
+    .map(
+      (stop) =>
+        `<stop offset="${formatNumber(stop.offset * 100)}%" stop-color="${escapeAttribute(stop.color)}"${stop.opacity === undefined ? "" : ` stop-opacity="${formatNumber(stop.opacity)}"`} />`,
+    )
+    .join("");
+
+  if (gradient.type === "linear") {
+    return `<linearGradient id="${escapeAttribute(gradient.id)}" gradientUnits="userSpaceOnUse" x1="${formatNumber(gradient.x1)}" y1="${formatNumber(gradient.y1)}" x2="${formatNumber(gradient.x2)}" y2="${formatNumber(gradient.y2)}">${stops}</linearGradient>`;
+  }
+
+  return `<radialGradient id="${escapeAttribute(gradient.id)}" gradientUnits="userSpaceOnUse" cx="${formatNumber(gradient.cx)}" cy="${formatNumber(gradient.cy)}" r="${formatNumber(gradient.r)}"${optionalNumber("fx", gradient.fx)}${optionalNumber("fy", gradient.fy)}>${stops}</radialGradient>`;
+}
+
 function renderTextNode(node: Extract<GeometryNode, { type: "text" }>): string {
   const lines = textLines(node.text);
-  const common = `${renderId(node.id)}${renderName(node.name)}${renderTextStyle(node)} x="${formatNumber(node.x)}" y="${formatNumber(node.y)}"`;
+  const common = `${renderId(node.id)}${renderName(node.name)}${renderTextStyle(node)}${renderTransform(node.transform)}${renderClipPathAttribute(node)}${renderMaskAttribute(node)} x="${formatNumber(node.x)}" y="${formatNumber(node.y)}"`;
 
   if (lines.length === 1) {
     return `<text${common}>${escapeText(node.text)}</text>`;
@@ -810,8 +1206,10 @@ function renderTextStyle(
   const opacity = node.style?.opacity ?? node.opacity;
 
   return [
-    ` fill="${escapeAttribute(fill)}"`,
-    stroke === undefined ? "" : ` stroke="${escapeAttribute(stroke)}"`,
+    ` fill="${escapeAttribute(renderPaint(fill))}"`,
+    stroke === undefined
+      ? ""
+      : ` stroke="${escapeAttribute(renderPaint(stroke))}"`,
     strokeWidth === undefined
       ? ""
       : ` stroke-width="${formatNumber(strokeWidth)}"`,
@@ -835,6 +1233,155 @@ function renderTextStyle(
       : ` dominant-baseline="${escapeAttribute(node.dominantBaseline)}"`,
     opacity === undefined ? "" : ` opacity="${formatNumber(opacity)}"`,
   ].join("");
+}
+
+function renderTransform(transform: NodeTransform | undefined): string {
+  if (!transform) {
+    return "";
+  }
+
+  const matrix = transformMatrix(transform);
+
+  return ` transform="matrix(${formatNumber(matrix.a)} ${formatNumber(matrix.b)} ${formatNumber(matrix.c)} ${formatNumber(matrix.d)} ${formatNumber(matrix.e)} ${formatNumber(matrix.f)})"`;
+}
+
+function transformMatrix(transform: NodeTransform): SvgMatrix {
+  const translateX = transform.translateX ?? 0;
+  const translateY = transform.translateY ?? 0;
+  const rotation = ((transform.rotation ?? 0) * Math.PI) / 180;
+  const scaleX = transform.scaleX ?? 1;
+  const scaleY = transform.scaleY ?? 1;
+  const originX = transform.originX ?? 0;
+  const originY = transform.originY ?? 0;
+  const cosine = Math.cos(rotation);
+  const sine = Math.sin(rotation);
+  const a = cosine * scaleX;
+  const b = sine * scaleX;
+  const c = -sine * scaleY;
+  const d = cosine * scaleY;
+
+  return {
+    a,
+    b,
+    c,
+    d,
+    e: translateX + originX - a * originX - c * originY,
+    f: translateY + originY - b * originX - d * originY,
+  };
+}
+
+type SvgMatrix = {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+};
+
+function parseTransform(value: string | null): NodeTransform | undefined {
+  if (!value?.trim()) {
+    return undefined;
+  }
+
+  if (value.replace(/[a-zA-Z]+\s*\([^)]*\)/g, "").trim()) {
+    return undefined;
+  }
+
+  const expression = /([a-zA-Z]+)\s*\(([^)]*)\)/g;
+  let matrix: SvgMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+  let match: RegExpExecArray | null;
+  let found = false;
+
+  while ((match = expression.exec(value))) {
+    const command = match[1]?.toLowerCase();
+    const numbers = parseNumberList(match[2] ?? "");
+    let next: SvgMatrix | undefined;
+
+    switch (command) {
+      case "matrix":
+        if (numbers.length === 6 && numbers.every(Number.isFinite)) {
+          const [a, b, c, d, e, f] = numbers;
+          next = { a: a!, b: b!, c: c!, d: d!, e: e!, f: f! };
+        }
+        break;
+      case "translate":
+        if (numbers.length >= 1 && Number.isFinite(numbers[0])) {
+          next = { a: 1, b: 0, c: 0, d: 1, e: numbers[0]!, f: numbers[1] ?? 0 };
+        }
+        break;
+      case "scale":
+        if (numbers.length >= 1 && Number.isFinite(numbers[0])) {
+          next = {
+            a: numbers[0]!,
+            b: 0,
+            c: 0,
+            d: numbers[1] ?? numbers[0]!,
+            e: 0,
+            f: 0,
+          };
+        }
+        break;
+      case "rotate":
+        if (numbers.length >= 1 && Number.isFinite(numbers[0])) {
+          const radians = (numbers[0]! * Math.PI) / 180;
+          const cosine = Math.cos(radians);
+          const sine = Math.sin(radians);
+          const originX = numbers[1] ?? 0;
+          const originY = numbers[2] ?? 0;
+          next = {
+            a: cosine,
+            b: sine,
+            c: -sine,
+            d: cosine,
+            e: originX - cosine * originX + sine * originY,
+            f: originY - sine * originX - cosine * originY,
+          };
+        }
+        break;
+    }
+
+    if (!next) {
+      return undefined;
+    }
+
+    matrix = multiplyMatrices(matrix, next);
+    found = true;
+  }
+
+  if (!found) {
+    return undefined;
+  }
+
+  const scaleX = Math.hypot(matrix.a, matrix.b);
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
+
+  if (
+    !Number.isFinite(scaleX) ||
+    !Number.isFinite(determinant) ||
+    scaleX === 0
+  ) {
+    return undefined;
+  }
+
+  return {
+    translateX: matrix.e,
+    translateY: matrix.f,
+    rotation: (Math.atan2(matrix.b, matrix.a) * 180) / Math.PI,
+    scaleX,
+    scaleY: determinant / scaleX,
+  };
+}
+
+function multiplyMatrices(left: SvgMatrix, right: SvgMatrix): SvgMatrix {
+  return {
+    a: left.a * right.a + left.c * right.b,
+    b: left.b * right.a + left.d * right.b,
+    c: left.a * right.c + left.c * right.d,
+    d: left.b * right.c + left.d * right.d,
+    e: left.a * right.e + left.c * right.f + left.e,
+    f: left.b * right.e + left.d * right.f + left.f,
+  };
 }
 
 function renderPathData(
@@ -888,8 +1435,8 @@ function renderStyle(style: NodeStyle | undefined): string {
   const opacity = style?.opacity;
 
   return [
-    ` fill="${escapeAttribute(fill)}"`,
-    ` stroke="${escapeAttribute(stroke)}"`,
+    ` fill="${escapeAttribute(renderPaint(fill))}"`,
+    ` stroke="${escapeAttribute(renderPaint(stroke))}"`,
     ` stroke-width="${formatNumber(strokeWidth)}"`,
     strokeLinecap === undefined
       ? ""
@@ -910,6 +1457,14 @@ function renderStyle(style: NodeStyle | undefined): string {
   ].join("");
 }
 
+function renderPaint(paint: NodeStyle["fill"] | undefined): string {
+  if (paint && typeof paint !== "string") {
+    return `url(#${paint.gradientId})`;
+  }
+
+  return paint ?? "none";
+}
+
 function renderPoints(points: Point[]): string {
   return points
     .map((point) => `${formatNumber(point.x)},${formatNumber(point.y)}`)
@@ -926,6 +1481,10 @@ function renderName(name: string | undefined): string {
 
 function optionalNumber(name: string, value: number | undefined): string {
   return value === undefined ? "" : ` ${name}="${formatNumber(value)}"`;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
 }
 
 function formatNumber(value: number): string {

@@ -44,6 +44,14 @@ SVG
 
 VibeSVG は開発初期段階です。現在のリリースは CLI-first で、ローカルの editor session、project file、SVG export、MCP ベースの agent workflow にフォーカスしています。
 
+## SVG Feature Support
+
+VibeSVG は編集可能な SVG の概念を構造化された Geometry AST として保持し、SVG XML は import / export 境界で生成・解析します。
+
+現時点では、geometry node と正規化された path、solid fill / stroke、linear / radial gradient、translate / rotate / scale transform、geometry node を参照する clip path と alpha mask、blur / drop shadow をサポートしています。
+
+次の優先事項は、inner shadow、blend mode、追加の high-level effect、pattern paint / marker、再利用可能な symbol / instance、rich text run、外部 SVG の transform / filter / mask 構文との互換性強化です。Boolean Union / Subtract は、通常の SVG path の import・編集には不要な geometry authoring 操作のため、意図的に後回しにしています。
+
 ## Quick Start
 
 VibeSVG をインストールします。
