@@ -89,6 +89,8 @@
 	let spacePressed = $state(false);
 	let lastDragPoint = $state<Point | undefined>();
 	let lastPanPoint = $state<Point | undefined>();
+	let lastGestureScale = 1;
+	let usesNativeGestureEvents = false;
 	let nextNodeIndex = $state(1);
 	let canvasPixelRatio = $state(1);
 	let snapTarget = $state<SnapPoint | undefined>();
@@ -145,6 +147,7 @@
 
 	const strokeLinecapOptions = ['butt', 'round', 'square'] as const;
 	const strokeLinejoinOptions = ['miter', 'round', 'bevel'] as const;
+	const pinchZoomSensitivity = 1.75;
 	const iconPaths = {
 		app: '/icons/App-Icon.svg',
 		arc: '/icons/Arc.svg',
@@ -332,6 +335,7 @@
 
 	onMount(() => {
 		context = canvas.getContext('2d') ?? undefined;
+		usesNativeGestureEvents = 'GestureEvent' in window;
 		connectHostWebSocket();
 
 		const resize = () => {
@@ -436,6 +440,11 @@
 		window.addEventListener('keydown', handleKeyDown);
 		window.addEventListener('keyup', handleKeyUp);
 		window.addEventListener('click', handleWindowClick);
+		if (usesNativeGestureEvents) {
+			canvas.addEventListener('gesturestart', handleGestureStart, { passive: false });
+			canvas.addEventListener('gesturechange', handleGestureChange, { passive: false });
+			canvas.addEventListener('gestureend', handleGestureEnd, { passive: false });
+		}
 
 		return () => {
 			closeHostWebSocket();
@@ -443,6 +452,11 @@
 			window.removeEventListener('keydown', handleKeyDown);
 			window.removeEventListener('keyup', handleKeyUp);
 			window.removeEventListener('click', handleWindowClick);
+			if (usesNativeGestureEvents) {
+				canvas.removeEventListener('gesturestart', handleGestureStart);
+				canvas.removeEventListener('gesturechange', handleGestureChange);
+				canvas.removeEventListener('gestureend', handleGestureEnd);
+			}
 		};
 	});
 
@@ -519,10 +533,9 @@
 		const worldPoint =
 			tool === 'select' || isShapeTool(tool) ? rawWorldPoint : snapWorldPoint(rawWorldPoint);
 
-		canvas.setPointerCapture(event.pointerId);
-
-		if (event.button === 1 || event.button === 2 || spacePressed) {
+		if (event.button === 1 || (event.button === 0 && spacePressed)) {
 			event.preventDefault();
+			canvas.setPointerCapture(event.pointerId);
 			panning = true;
 			lastPanPoint = screenPoint;
 			return;
@@ -531,6 +544,8 @@
 		if (event.button !== 0) {
 			return;
 		}
+
+		canvas.setPointerCapture(event.pointerId);
 
 		if (tool === 'select') {
 			const hitHandle = hitTestEditHandle(
@@ -650,7 +665,9 @@
 	}
 
 	function handlePointerUp(event: PointerEvent) {
-		canvas.releasePointerCapture(event.pointerId);
+		if (canvas.hasPointerCapture(event.pointerId)) {
+			canvas.releasePointerCapture(event.pointerId);
+		}
 
 		if (panning) {
 			panning = false;
@@ -692,8 +709,73 @@
 		event.preventDefault();
 
 		const screenPoint = pointerToScreen(event);
-		const zoomMultiplier = Math.exp(-event.deltaY * 0.0008);
+
+		// WebKit exposes pinch through GestureEvent, so every wheel event remains a
+		// two-finger pan there. Chromium uses ctrl+wheel for trackpad pinches.
+		if (usesNativeGestureEvents || !event.ctrlKey) {
+			const deltaMultiplier =
+				event.deltaMode === WheelEvent.DOM_DELTA_LINE
+					? 16
+					: event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+						? canvas.clientHeight
+						: 1;
+
+			viewport = panViewport(viewport, {
+				x: -event.deltaX * deltaMultiplier,
+				y: -event.deltaY * deltaMultiplier
+			});
+			return;
+		}
+
+		const zoomMultiplier = Math.exp(-event.deltaY * 0.0008 * pinchZoomSensitivity);
 		viewport = zoomViewportAtPoint(viewport, screenPoint, viewport.zoom * zoomMultiplier);
+	}
+
+	type SafariGestureEvent = Event & { clientX: number; clientY: number; scale: number };
+
+	function isSafariGestureEvent(event: Event): event is SafariGestureEvent {
+		return 'scale' in event && typeof event.scale === 'number';
+	}
+
+	function handleGestureStart(event: Event) {
+		if (!isSafariGestureEvent(event)) {
+			return;
+		}
+
+		event.preventDefault();
+		lastGestureScale = event.scale;
+	}
+
+	function handleGestureChange(event: Event) {
+		if (!isSafariGestureEvent(event)) {
+			return;
+		}
+
+		event.preventDefault();
+
+		if (lastGestureScale <= 0 || event.scale <= 0) {
+			return;
+		}
+
+		const rect = canvas.getBoundingClientRect();
+		const scaleChange = event.scale / lastGestureScale;
+		viewport = zoomViewportAtPoint(
+			viewport,
+			{
+				x: event.clientX - rect.left,
+				y: event.clientY - rect.top
+			},
+			viewport.zoom * scaleChange ** pinchZoomSensitivity
+		);
+		lastGestureScale = event.scale;
+	}
+
+	function handleGestureEnd(event: Event) {
+		if (isSafariGestureEvent(event)) {
+			event.preventDefault();
+		}
+
+		lastGestureScale = 1;
 	}
 
 	function updateDocumentDimension(field: 'width' | 'height', event: Event) {
