@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/vibesvg"><img src="https://img.shields.io/npm/v/vibesvg?style=flat-square" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/vibesvg"><img src="https://img.shields.io/npm/dm/vibesvg?style=flat-square" alt="npm downloads" /></a>
-  <a href="https://github.com/KobayashiRui/vibe-svg-editor/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/vibesvg?style=flat-square" alt="license" /></a>
+  <a href="https://github.com/KobayashiRui/vibe-svg-editor/blob/main/LICENSE"><img src="https://img.shields.io/github/license/KobayashiRui/vibe-svg-editor?style=flat-square" alt="MIT license" /></a>
   <img src="https://img.shields.io/node/v/vibesvg?style=flat-square" alt="node version" />
   <img src="https://img.shields.io/badge/pnpm-9.0.0-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm 9.0.0" />
 </p>
