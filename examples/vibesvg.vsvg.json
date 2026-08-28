@@ -717,10 +717,8 @@
         },
         "comments": [],
         "background": {
-          "type": "checkerboard",
-          "light": "#fafafa",
-          "dark": "#B0B0B0",
-          "size": 32
+          "type": "solid",
+          "color": "#ffffff"
         },
         "resources": {
           "gradients": [
@@ -2115,5 +2113,5 @@
     }
   ],
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-08-28T06:30:42.976Z"
+  "updatedAt": "2026-08-28T07:13:00.968Z"
 }
