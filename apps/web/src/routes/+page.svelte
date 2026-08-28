@@ -58,12 +58,10 @@
 		findParentNode,
 		groupNodes,
 		moveNodeToParent,
-		reorderChildren,
 		ungroupNode
 	} from '@vibesvg/kernel';
 	import { exportToSvg, importFromSvg } from '@vibesvg/svg';
 	import { DragDropProvider, type DragDropEventHandlers } from '@dnd-kit/svelte';
-	import { isSortable } from '@dnd-kit/svelte/sortable';
 	import { strToU8, zipSync } from 'fflate';
 	import ExportSvgPopover from '$lib/ExportSvgPopover.svelte';
 	import PageThumbnail from '$lib/PageThumbnail.svelte';
@@ -114,6 +112,7 @@
 	let expandedGroupIds = $state<NodeId[]>([]);
 	let layerDragStartProject: VibeSVGProject | undefined;
 	let layerDragNodeId = $state<NodeId | undefined>();
+	let layerDropIntent = $state<LayerDropIntent | undefined>();
 	let layerContextMenu = $state<{ nodeId?: NodeId; x: number; y: number } | undefined>();
 	let pageContextMenu = $state<{ pageId: string; x: number; y: number } | undefined>();
 	let pageTooltip = $state<{ text: string; x: number; y: number } | undefined>();
@@ -129,6 +128,12 @@
 	type DragOverEvent = Parameters<NonNullable<DragDropEventHandlers['onDragOver']>>[0];
 	type DragEndEvent = Parameters<NonNullable<DragDropEventHandlers['onDragEnd']>>[0];
 	type ShapeTool = 'rect' | 'ellipse' | 'triangle';
+	type LayerDropPosition = 'before' | 'after' | 'inside';
+	type LayerDropIntent = {
+		sourceId: NodeId;
+		targetId: NodeId;
+		position: LayerDropPosition;
+	};
 
 	const uiColors = {
 		primary: '#4b7dff',
@@ -170,11 +175,7 @@
 	);
 	const geometryDocument = $derived(activePage.document);
 	const layerItems = $derived(buildLayerItems(geometryDocument.root, expandedGroupIds));
-	const visibleLayerItems = $derived(
-		layerItems
-			.filter((item) => !isHiddenByLayerDrag(item))
-			.map((item, sortIndex) => ({ ...item, sortIndex }))
-	);
+	const visibleLayerItems = $derived(layerItems.filter((item) => !isHiddenByLayerDrag(item)));
 	const svgExportPages = $derived(
 		project.pages.map((page, index) => ({
 			document: page.document,
@@ -223,8 +224,7 @@
 		const children = parent.children;
 
 		for (let uiIndex = 0; uiIndex < children.length; uiIndex += 1) {
-			const astIndex = children.length - 1 - uiIndex;
-			const node = children[astIndex];
+			const node = children[children.length - 1 - uiIndex];
 
 			if (!node) {
 				continue;
@@ -234,13 +234,11 @@
 			const isExpanded = expanded.has(node.id);
 
 			items.push({
-				astIndex,
 				depth,
 				expanded: isExpanded,
 				expandable,
 				node,
-				parentId: parent.id,
-				uiIndex
+				parentId: parent.id
 			});
 
 			if (node.type === 'group' && isExpanded) {
@@ -1923,45 +1921,55 @@
 	}
 
 	function handleLayerSortStart(event: DragStartEvent) {
-		if (!isSortable(event.operation.source)) {
+		const source = event.operation.source;
+
+		if (!source) {
 			return;
 		}
 
-		layerDragNodeId = String(event.operation.source.id);
+		const sourceId = String(source.id);
+
+		if (!visibleLayerItems.some((item) => item.node.id === sourceId)) {
+			return;
+		}
+
+		layerDragNodeId = sourceId;
+		layerDropIntent = undefined;
 		layerDragStartProject = cloneProject(project);
 	}
 
 	function handleLayerSortOver(event: DragOverEvent) {
 		const { source, target } = event.operation;
 
-		if (!isSortable(source) || !isSortable(target) || source.id === target.id) {
+		if (!source) {
 			return;
 		}
 
-		const sourceItem = visibleLayerItems.find((item) => item.node.id === source.id);
-		const targetItem = visibleLayerItems.find((item) => item.node.id === target.id);
+		const intent = resolveLayerDropIntent(String(source.id), target?.data);
 
-		if (!sourceItem || !targetItem) {
-			return;
+		// Some sensors briefly report no target immediately before pointer-up. Keep
+		// the last valid intention until onDragEnd can read its final target.
+		if (intent) {
+			layerDropIntent = intent;
 		}
-
-		moveLayer(sourceItem, targetItem);
 	}
 
 	function handleLayerSortEnd(event: DragEndEvent) {
 		const startProject = layerDragStartProject;
+		const source = event.operation.source;
+		const finalIntent = source
+			? resolveLayerDropIntent(String(source.id), event.operation.target?.data)
+			: undefined;
+		const dropIntent = finalIntent ?? layerDropIntent;
 		layerDragStartProject = undefined;
 		layerDragNodeId = undefined;
+		layerDropIntent = undefined;
 
-		if (!startProject) {
+		if (!startProject || event.canceled || !dropIntent) {
 			return;
 		}
 
-		if (event.canceled) {
-			project = startProject;
-			markProjectChanged();
-			return;
-		}
+		applyLayerDropIntent(dropIntent);
 
 		if (projectsEqual(project, startProject)) {
 			return;
@@ -1971,64 +1979,117 @@
 		redoStack = [];
 	}
 
-	function moveLayer(sourceItem: LayerItem, targetItem: LayerItem) {
-		if (targetItem.node.type === 'group' && targetItem.node.id !== sourceItem.parentId) {
-			moveLayerIntoGroup(sourceItem, targetItem.node.id);
-			return;
+	type LayerDropData = { kind: 'layer-drop'; nodeId: NodeId; position: LayerDropPosition };
+
+	function resolveLayerDropIntent(sourceId: string, value: unknown): LayerDropIntent | undefined {
+		if (!isLayerDropData(value)) {
+			return undefined;
+		}
+
+		const sourceItem = layerItems.find((item) => item.node.id === sourceId);
+		const targetItem = layerItems.find((item) => item.node.id === value.nodeId);
+
+		if (!sourceItem || !targetItem || !canCreateLayerDropIntent(sourceItem, targetItem, value.position)) {
+			return undefined;
+		}
+
+		return {
+			sourceId,
+			targetId: value.nodeId,
+			position: value.position
+		};
+	}
+
+	function isLayerDropData(value: unknown): value is LayerDropData {
+		if (!value || typeof value !== 'object') {
+			return false;
+		}
+
+		const data = value as Partial<LayerDropData>;
+
+		return (
+			data.kind === 'layer-drop' &&
+			typeof data.nodeId === 'string' &&
+			(data.position === 'before' ||
+				data.position === 'after' ||
+				data.position === 'inside')
+		);
+	}
+
+	function canCreateLayerDropIntent(
+		sourceItem: LayerItem,
+		targetItem: LayerItem,
+		position: LayerDropPosition
+	) {
+		if (sourceItem.node.id === targetItem.node.id) {
+			return false;
+		}
+
+		if (position === 'inside') {
+			return (
+				targetItem.node.type === 'group' &&
+				targetItem.node.id !== sourceItem.parentId &&
+				canMoveLayerToParent(sourceItem.node.id, targetItem.node.id)
+			);
 		}
 
 		if (sourceItem.parentId === targetItem.parentId) {
-			reorderLayer(sourceItem, targetItem);
-			return;
+			return canMoveLayerToParent(sourceItem.node.id, targetItem.parentId);
 		}
 
-		moveLayerToParent(sourceItem, targetItem.parentId, targetItem.astIndex);
-	}
-
-	function reorderLayer(sourceItem: LayerItem, targetItem: LayerItem) {
-		if (sourceItem.astIndex === targetItem.astIndex) {
-			return;
-		}
-
-		updateActiveDocument(
-			reorderChildren(
-				geometryDocument,
-				sourceItem.parentId,
-				sourceItem.astIndex,
-				targetItem.astIndex
-			)
+		// Group row edges represent the boundary of that whole branch. This lets a
+		// child leave its group by dropping above/below the parent group, while a
+		// regular child row remains a same-parent reorder target only.
+		return (
+			targetItem.node.type === 'group' &&
+			canMoveLayerToParent(sourceItem.node.id, targetItem.parentId)
 		);
 	}
 
-	function moveLayerIntoGroup(sourceItem: LayerItem, targetParentId: NodeId) {
-		const targetParent = findNode(geometryDocument, targetParentId);
+	function applyLayerDropIntent(intent: LayerDropIntent) {
+		const sourceItem = layerItems.find((item) => item.node.id === intent.sourceId);
+		const targetItem = layerItems.find((item) => item.node.id === intent.targetId);
 
-		if (
-			!targetParent ||
-			targetParent.type !== 'group' ||
-			!canMoveLayerToParent(sourceItem.node.id, targetParentId)
-		) {
+		if (!sourceItem || !targetItem || !canCreateLayerDropIntent(sourceItem, targetItem, intent.position)) {
 			return;
 		}
 
-		updateActiveDocument(
-			moveNodeToParent(
-				geometryDocument,
-				sourceItem.node.id,
-				targetParentId,
-				targetParent.children.length
-			)
+		if (intent.position === 'inside') {
+			const targetParent = findNode(geometryDocument, targetItem.node.id);
+
+			if (!targetParent || targetParent.type !== 'group') {
+				return;
+			}
+
+			updateActiveDocument(
+				moveNodeToParent(
+					geometryDocument,
+					sourceItem.node.id,
+					targetParent.id,
+					targetParent.children.length
+				)
+			);
+			return;
+		}
+
+		const targetParent = findNode(geometryDocument, targetItem.parentId);
+
+		if (!targetParent || targetParent.type !== 'group') {
+			return;
+		}
+
+		const siblingsWithoutSource = targetParent.children.filter(
+			(child) => child.id !== sourceItem.node.id
 		);
-		expandedGroupIds = [...new Set([...expandedGroupIds, targetParentId])];
-	}
+		const targetIndex = siblingsWithoutSource.findIndex((child) => child.id === targetItem.node.id);
 
-	function moveLayerToParent(sourceItem: LayerItem, targetParentId: NodeId, targetIndex: number) {
-		if (!canMoveLayerToParent(sourceItem.node.id, targetParentId)) {
+		if (targetIndex < 0) {
 			return;
 		}
 
+		const insertIndex = intent.position === 'before' ? targetIndex + 1 : targetIndex;
 		updateActiveDocument(
-			moveNodeToParent(geometryDocument, sourceItem.node.id, targetParentId, targetIndex)
+			moveNodeToParent(geometryDocument, sourceItem.node.id, targetParent.id, insertIndex)
 		);
 	}
 
