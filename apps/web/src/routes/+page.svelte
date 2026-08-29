@@ -124,6 +124,7 @@
 	let projectNameInput = $state<HTMLInputElement | undefined>();
 
 	type DragStartEvent = Parameters<NonNullable<DragDropEventHandlers['onDragStart']>>[0];
+	type DragMoveEvent = Parameters<NonNullable<DragDropEventHandlers['onDragMove']>>[0];
 	type DragOverEvent = Parameters<NonNullable<DragDropEventHandlers['onDragOver']>>[0];
 	type DragEndEvent = Parameters<NonNullable<DragDropEventHandlers['onDragEnd']>>[0];
 	type LayerDragOperation = DragOverEvent['operation'];
@@ -1930,6 +1931,10 @@
 		layerDropIntent = resolveLayerDropIntent(event.operation);
 	}
 
+	function handleLayerSortMove(event: DragMoveEvent) {
+		layerDropIntent = resolveLayerDropIntent(event.operation);
+	}
+
 	function handleLayerSortEnd(event: DragEndEvent) {
 		const startProject = layerDragStartProject;
 		const dropIntent = resolveLayerDropIntent(event.operation);
@@ -2036,17 +2041,10 @@
 			);
 		}
 
-		if (sourceItem.parentId === targetItem.parentId) {
-			return canMoveLayerToParent(sourceItem.node.id, targetItem.parentId);
-		}
-
-		// Group row edges represent the boundary of that whole branch. This lets a
-		// child leave its group by dropping above/below the parent group, while a
-		// regular child row remains a same-parent reorder target only.
-		return (
-			targetItem.node.type === 'group' &&
-			canMoveLayerToParent(sourceItem.node.id, targetItem.parentId)
-		);
+		// An insertion line always belongs to the target row's parent. Its visual
+		// indentation therefore communicates the exact destination group, whether
+		// this is a sibling reorder or a cross-group move.
+		return canMoveLayerToParent(sourceItem.node.id, targetItem.parentId);
 	}
 
 	function applyLayerDropIntent(intent: LayerDropIntent) {
@@ -3931,6 +3929,7 @@
 			<h2 class="sidebar-title">Layers</h2>
 			<DragDropProvider
 				onDragStart={handleLayerSortStart}
+				onDragMove={handleLayerSortMove}
 				onDragOver={handleLayerSortOver}
 				onDragEnd={handleLayerSortEnd}
 			>
