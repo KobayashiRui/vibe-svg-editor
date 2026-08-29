@@ -111,7 +111,6 @@
 	let editingGroupId = $state<NodeId | undefined>();
 	let expandedGroupIds = $state<NodeId[]>([]);
 	let layerDragStartProject: VibeSVGProject | undefined;
-	let layerDragNodeId = $state<NodeId | undefined>();
 	let layerDropIntent = $state<LayerDropIntent | undefined>();
 	let layerContextMenu = $state<{ nodeId?: NodeId; x: number; y: number } | undefined>();
 	let pageContextMenu = $state<{ pageId: string; x: number; y: number } | undefined>();
@@ -127,6 +126,7 @@
 	type DragStartEvent = Parameters<NonNullable<DragDropEventHandlers['onDragStart']>>[0];
 	type DragOverEvent = Parameters<NonNullable<DragDropEventHandlers['onDragOver']>>[0];
 	type DragEndEvent = Parameters<NonNullable<DragDropEventHandlers['onDragEnd']>>[0];
+	type LayerDragOperation = DragOverEvent['operation'];
 	type ShapeTool = 'rect' | 'ellipse' | 'triangle';
 	type LayerDropPosition = 'before' | 'after' | 'inside';
 	type LayerDropIntent = {
@@ -175,7 +175,6 @@
 	);
 	const geometryDocument = $derived(activePage.document);
 	const layerItems = $derived(buildLayerItems(geometryDocument.root, expandedGroupIds));
-	const visibleLayerItems = $derived(layerItems.filter((item) => !isHiddenByLayerDrag(item)));
 	const svgExportPages = $derived(
 		project.pages.map((page, index) => ({
 			document: page.document,
@@ -300,16 +299,6 @@
 		}
 
 		return candidates;
-	}
-
-	function isHiddenByLayerDrag(item: LayerItem) {
-		if (!layerDragNodeId || item.node.id === layerDragNodeId) {
-			return false;
-		}
-
-		const dragNode = findNode(geometryDocument, layerDragNodeId);
-
-		return dragNode?.type === 'group' && isAncestorOf(layerDragNodeId, item.node.id);
 	}
 
 	$effect(() => {
@@ -1929,40 +1918,22 @@
 
 		const sourceId = String(source.id);
 
-		if (!visibleLayerItems.some((item) => item.node.id === sourceId)) {
+		if (!layerItems.some((item) => item.node.id === sourceId)) {
 			return;
 		}
 
-		layerDragNodeId = sourceId;
 		layerDropIntent = undefined;
 		layerDragStartProject = cloneProject(project);
 	}
 
 	function handleLayerSortOver(event: DragOverEvent) {
-		const { source, target } = event.operation;
-
-		if (!source) {
-			return;
-		}
-
-		const intent = resolveLayerDropIntent(String(source.id), target?.data);
-
-		// Some sensors briefly report no target immediately before pointer-up. Keep
-		// the last valid intention until onDragEnd can read its final target.
-		if (intent) {
-			layerDropIntent = intent;
-		}
+		layerDropIntent = resolveLayerDropIntent(event.operation);
 	}
 
 	function handleLayerSortEnd(event: DragEndEvent) {
 		const startProject = layerDragStartProject;
-		const source = event.operation.source;
-		const finalIntent = source
-			? resolveLayerDropIntent(String(source.id), event.operation.target?.data)
-			: undefined;
-		const dropIntent = finalIntent ?? layerDropIntent;
+		const dropIntent = resolveLayerDropIntent(event.operation);
 		layerDragStartProject = undefined;
-		layerDragNodeId = undefined;
 		layerDropIntent = undefined;
 
 		if (!startProject || event.canceled || !dropIntent) {
@@ -1979,25 +1950,60 @@
 		redoStack = [];
 	}
 
-	type LayerDropData = { kind: 'layer-drop'; nodeId: NodeId; position: LayerDropPosition };
+	type LayerDropData = { kind: 'layer-row'; nodeId: NodeId };
 
-	function resolveLayerDropIntent(sourceId: string, value: unknown): LayerDropIntent | undefined {
-		if (!isLayerDropData(value)) {
+	function resolveLayerDropIntent(operation: LayerDragOperation): LayerDropIntent | undefined {
+		const source = operation.source;
+		const target = operation.target;
+
+		if (!source || !target || !isLayerDropData(target.data)) {
 			return undefined;
 		}
 
+		const sourceId = String(source.id);
 		const sourceItem = layerItems.find((item) => item.node.id === sourceId);
-		const targetItem = layerItems.find((item) => item.node.id === value.nodeId);
+		const targetItem = layerItems.find((item) => item.node.id === target.data.nodeId);
+		const position = layerDropPosition(operation, targetItem);
 
-		if (!sourceItem || !targetItem || !canCreateLayerDropIntent(sourceItem, targetItem, value.position)) {
+		if (!sourceItem || !targetItem || !position || !canCreateLayerDropIntent(sourceItem, targetItem, position)) {
 			return undefined;
 		}
 
 		return {
 			sourceId,
-			targetId: value.nodeId,
-			position: value.position
+			targetId: target.data.nodeId,
+			position
 		};
+	}
+
+	function layerDropPosition(
+		operation: LayerDragOperation,
+		targetItem: LayerItem | undefined
+	): LayerDropPosition | undefined {
+		const targetBounds = operation.target?.element?.getBoundingClientRect();
+
+		if (!targetItem || !targetBounds || targetBounds.height <= 0) {
+			return undefined;
+		}
+
+		const pointerRatio = Math.max(
+			0,
+			Math.min(1, (operation.position.current.y - targetBounds.top) / targetBounds.height)
+		);
+
+		if (targetItem.node.type !== 'group') {
+			return pointerRatio < 0.5 ? 'before' : 'after';
+		}
+
+		if (pointerRatio < 0.25) {
+			return 'before';
+		}
+
+		if (pointerRatio > 0.75) {
+			return 'after';
+		}
+
+		return 'inside';
 	}
 
 	function isLayerDropData(value: unknown): value is LayerDropData {
@@ -2008,11 +2014,8 @@
 		const data = value as Partial<LayerDropData>;
 
 		return (
-			data.kind === 'layer-drop' &&
-			typeof data.nodeId === 'string' &&
-			(data.position === 'before' ||
-				data.position === 'after' ||
-				data.position === 'inside')
+			data.kind === 'layer-row' &&
+			typeof data.nodeId === 'string'
 		);
 	}
 
@@ -3936,10 +3939,13 @@
 						<div class="empty-row">No nodes</div>
 					{/if}
 
-					{#each visibleLayerItems as item (item.node.id)}
+					{#each layerItems as item (item.node.id)}
 						<LayerRow
 							{item}
 							selected={selectedNodeIds.includes(item.node.id)}
+							dropPosition={layerDropIntent?.targetId === item.node.id
+								? layerDropIntent.position
+								: undefined}
 							onContextMenu={openLayerContextMenu}
 							onEditGroup={editGroup}
 							onSelect={selectNode}

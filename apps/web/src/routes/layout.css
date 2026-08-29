@@ -1923,29 +1923,6 @@ body {
 	margin-left: 0;
 }
 
-.layer-drop-zone {
-	position: absolute;
-	left: 0;
-	right: 0;
-	z-index: 2;
-	pointer-events: none;
-}
-
-.layer-drop-zone-before {
-	top: -4px;
-	height: 36%;
-}
-
-.layer-drop-zone-inside {
-	top: 36%;
-	height: 28%;
-}
-
-.layer-drop-zone-after {
-	bottom: -4px;
-	height: 36%;
-}
-
 .layer-row,
 .empty-row {
 	min-height: 32px;
@@ -1999,14 +1976,19 @@ body {
 	box-shadow: inset 2px 0 0 var(--color-gs-primary);
 }
 
-.layer-row.expanded-group,
-.layer-row.nested-row {
+/* Hierarchy is communicated by indentation and disclosure, not persistent tree lines. */
+.layer-row.expanded-group {
 	border-color: transparent;
-	background: rgb(255 255 255 / 2%);
+	background: transparent;
 }
 
 .layer-row.nested-row {
-	border-left-color: rgb(106 149 255 / 48%);
+	border-left-color: transparent;
+	background: transparent;
+}
+
+.layer-row.nested-row::before {
+	display: none;
 }
 
 .layer-row.nested-row.selected {

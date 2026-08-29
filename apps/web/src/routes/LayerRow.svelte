@@ -14,43 +14,44 @@
 	type Props = {
 		item: LayerItem;
 		selected: boolean;
+		dropPosition?: 'before' | 'after' | 'inside';
 		onEditGroup: (nodeId: NodeId) => void;
 		onContextMenu: (event: MouseEvent, nodeId: NodeId) => void;
 		onSelect: (nodeId: NodeId, additive: boolean) => void;
 		onToggleExpanded: (nodeId: NodeId) => void;
 	};
 
-	let { item, selected, onContextMenu, onEditGroup, onSelect, onToggleExpanded }: Props = $props();
+	let {
+		item,
+		selected,
+		dropPosition,
+		onContextMenu,
+		onEditGroup,
+		onSelect,
+		onToggleExpanded
+	}: Props = $props();
 
 	const draggable = createDraggable({
 		get id() {
 			return item.node.id;
 		},
 		data: { kind: 'layer' },
+		type: 'layer',
 		modifiers: [RestrictToVerticalAxis]
 	});
 
-	function createLayerDropZone(position: 'before' | 'after' | 'inside') {
-		return createDroppable({
-			get id() {
-				return `layer-drop:${item.node.id}:${position}`;
-			},
-			get disabled() {
-				return position === 'inside' && item.node.type !== 'group';
-			},
-			data: {
-				kind: 'layer-drop',
-				get nodeId() {
-					return item.node.id;
-				},
-				position
+	const droppable = createDroppable({
+		get id() {
+			return `layer-drop:${item.node.id}`;
+		},
+		accept: (source) => source.type === 'layer' && source.id !== item.node.id,
+		data: {
+			kind: 'layer-row',
+			get nodeId() {
+				return item.node.id;
 			}
-		});
-	}
-
-	const dropBefore = createLayerDropZone('before');
-	const dropAfter = createLayerDropZone('after');
-	const dropInside = createLayerDropZone('inside');
+		}
+	});
 
 	function select(event: MouseEvent) {
 		onSelect(item.node.id, event.shiftKey || event.metaKey || event.ctrlKey);
@@ -58,18 +59,13 @@
 </script>
 
 <div
-	class:drop-after={dropAfter.isDropTarget}
-	class:drop-before={dropBefore.isDropTarget}
-	class:drop-inside={dropInside.isDropTarget}
+	class:drop-after={dropPosition === 'after'}
+	class:drop-before={dropPosition === 'before'}
+	class:drop-inside={dropPosition === 'inside'}
 	class="layer-row-drop"
 	style={`--layer-depth: ${item.depth};`}
+	{@attach droppable.attach}
 >
-	<div aria-hidden="true" class="layer-drop-zone layer-drop-zone-before" {@attach dropBefore.attach}></div>
-	{#if item.node.type === 'group'}
-		<div aria-hidden="true" class="layer-drop-zone layer-drop-zone-inside" {@attach dropInside.attach}></div>
-	{/if}
-	<div aria-hidden="true" class="layer-drop-zone layer-drop-zone-after" {@attach dropAfter.attach}></div>
-
 	<div
 		class:dragging={draggable.isDragging}
 		class:expanded-group={item.node.type === 'group' && item.expanded}
