@@ -58,12 +58,10 @@
 		findParentNode,
 		groupNodes,
 		moveNodeToParent,
-		reorderChildren,
 		ungroupNode
 	} from '@vibesvg/kernel';
 	import { exportToSvg, importFromSvg } from '@vibesvg/svg';
 	import { DragDropProvider, type DragDropEventHandlers } from '@dnd-kit/svelte';
-	import { isSortable } from '@dnd-kit/svelte/sortable';
 	import { strToU8, zipSync } from 'fflate';
 	import ExportSvgPopover from '$lib/ExportSvgPopover.svelte';
 	import PageThumbnail from '$lib/PageThumbnail.svelte';
@@ -89,6 +87,8 @@
 	let spacePressed = $state(false);
 	let lastDragPoint = $state<Point | undefined>();
 	let lastPanPoint = $state<Point | undefined>();
+	let lastGestureScale = 1;
+	let usesNativeGestureEvents = false;
 	let nextNodeIndex = $state(1);
 	let canvasPixelRatio = $state(1);
 	let snapTarget = $state<SnapPoint | undefined>();
@@ -111,7 +111,7 @@
 	let editingGroupId = $state<NodeId | undefined>();
 	let expandedGroupIds = $state<NodeId[]>([]);
 	let layerDragStartProject: VibeSVGProject | undefined;
-	let layerDragNodeId = $state<NodeId | undefined>();
+	let layerDropIntent = $state<LayerDropIntent | undefined>();
 	let layerContextMenu = $state<{ nodeId?: NodeId; x: number; y: number } | undefined>();
 	let pageContextMenu = $state<{ pageId: string; x: number; y: number } | undefined>();
 	let pageTooltip = $state<{ text: string; x: number; y: number } | undefined>();
@@ -124,16 +124,23 @@
 	let projectNameInput = $state<HTMLInputElement | undefined>();
 
 	type DragStartEvent = Parameters<NonNullable<DragDropEventHandlers['onDragStart']>>[0];
+	type DragMoveEvent = Parameters<NonNullable<DragDropEventHandlers['onDragMove']>>[0];
 	type DragOverEvent = Parameters<NonNullable<DragDropEventHandlers['onDragOver']>>[0];
 	type DragEndEvent = Parameters<NonNullable<DragDropEventHandlers['onDragEnd']>>[0];
+	type LayerDragOperation = DragOverEvent['operation'];
 	type ShapeTool = 'rect' | 'ellipse' | 'triangle';
+	type LayerDropPosition = 'before' | 'after' | 'inside';
+	type LayerDropIntent = {
+		sourceId: NodeId;
+		targetId: NodeId;
+		position: LayerDropPosition;
+	};
 
 	const uiColors = {
-		primary: '#4f8ef7',
-		primaryHover: '#6ea4ff',
-		primaryPreviewFill: 'rgba(79, 142, 247, 0.08)',
-		warning: '#facc15',
-		workbench: '#383838'
+		primary: '#4b7dff',
+		primaryHover: '#6a95ff',
+		primaryPreviewFill: 'rgba(75, 125, 255, 0.08)',
+		warning: '#facc15'
 	} as const;
 
 	const pageBackgroundColorFallbacks = {
@@ -146,6 +153,7 @@
 
 	const strokeLinecapOptions = ['butt', 'round', 'square'] as const;
 	const strokeLinejoinOptions = ['miter', 'round', 'bevel'] as const;
+	const pinchZoomSensitivity = 1.75;
 	const iconPaths = {
 		app: '/icons/App-Icon.svg',
 		arc: '/icons/Arc.svg',
@@ -168,11 +176,6 @@
 	);
 	const geometryDocument = $derived(activePage.document);
 	const layerItems = $derived(buildLayerItems(geometryDocument.root, expandedGroupIds));
-	const visibleLayerItems = $derived(
-		layerItems
-			.filter((item) => !isHiddenByLayerDrag(item))
-			.map((item, sortIndex) => ({ ...item, sortIndex }))
-	);
 	const svgExportPages = $derived(
 		project.pages.map((page, index) => ({
 			document: page.document,
@@ -221,8 +224,7 @@
 		const children = parent.children;
 
 		for (let uiIndex = 0; uiIndex < children.length; uiIndex += 1) {
-			const astIndex = children.length - 1 - uiIndex;
-			const node = children[astIndex];
+			const node = children[children.length - 1 - uiIndex];
 
 			if (!node) {
 				continue;
@@ -232,13 +234,11 @@
 			const isExpanded = expanded.has(node.id);
 
 			items.push({
-				astIndex,
 				depth,
 				expanded: isExpanded,
 				expandable,
 				node,
-				parentId: parent.id,
-				uiIndex
+				parentId: parent.id
 			});
 
 			if (node.type === 'group' && isExpanded) {
@@ -302,16 +302,6 @@
 		return candidates;
 	}
 
-	function isHiddenByLayerDrag(item: LayerItem) {
-		if (!layerDragNodeId || item.node.id === layerDragNodeId) {
-			return false;
-		}
-
-		const dragNode = findNode(geometryDocument, layerDragNodeId);
-
-		return dragNode?.type === 'group' && isAncestorOf(layerDragNodeId, item.node.id);
-	}
-
 	$effect(() => {
 		geometryDocument;
 		selectedNodeIds;
@@ -333,6 +323,7 @@
 
 	onMount(() => {
 		context = canvas.getContext('2d') ?? undefined;
+		usesNativeGestureEvents = 'GestureEvent' in window;
 		connectHostWebSocket();
 
 		const resize = () => {
@@ -437,6 +428,11 @@
 		window.addEventListener('keydown', handleKeyDown);
 		window.addEventListener('keyup', handleKeyUp);
 		window.addEventListener('click', handleWindowClick);
+		if (usesNativeGestureEvents) {
+			canvas.addEventListener('gesturestart', handleGestureStart, { passive: false });
+			canvas.addEventListener('gesturechange', handleGestureChange, { passive: false });
+			canvas.addEventListener('gestureend', handleGestureEnd, { passive: false });
+		}
 
 		return () => {
 			closeHostWebSocket();
@@ -444,6 +440,11 @@
 			window.removeEventListener('keydown', handleKeyDown);
 			window.removeEventListener('keyup', handleKeyUp);
 			window.removeEventListener('click', handleWindowClick);
+			if (usesNativeGestureEvents) {
+				canvas.removeEventListener('gesturestart', handleGestureStart);
+				canvas.removeEventListener('gesturechange', handleGestureChange);
+				canvas.removeEventListener('gestureend', handleGestureEnd);
+			}
 		};
 	});
 
@@ -520,10 +521,9 @@
 		const worldPoint =
 			tool === 'select' || isShapeTool(tool) ? rawWorldPoint : snapWorldPoint(rawWorldPoint);
 
-		canvas.setPointerCapture(event.pointerId);
-
-		if (event.button === 1 || event.button === 2 || spacePressed) {
+		if (event.button === 1 || (event.button === 0 && spacePressed)) {
 			event.preventDefault();
+			canvas.setPointerCapture(event.pointerId);
 			panning = true;
 			lastPanPoint = screenPoint;
 			return;
@@ -532,6 +532,8 @@
 		if (event.button !== 0) {
 			return;
 		}
+
+		canvas.setPointerCapture(event.pointerId);
 
 		if (tool === 'select') {
 			const hitHandle = hitTestEditHandle(
@@ -651,7 +653,9 @@
 	}
 
 	function handlePointerUp(event: PointerEvent) {
-		canvas.releasePointerCapture(event.pointerId);
+		if (canvas.hasPointerCapture(event.pointerId)) {
+			canvas.releasePointerCapture(event.pointerId);
+		}
 
 		if (panning) {
 			panning = false;
@@ -693,8 +697,73 @@
 		event.preventDefault();
 
 		const screenPoint = pointerToScreen(event);
-		const zoomMultiplier = Math.exp(-event.deltaY * 0.0008);
+
+		// WebKit exposes pinch through GestureEvent, so every wheel event remains a
+		// two-finger pan there. Chromium uses ctrl+wheel for trackpad pinches.
+		if (usesNativeGestureEvents || !event.ctrlKey) {
+			const deltaMultiplier =
+				event.deltaMode === WheelEvent.DOM_DELTA_LINE
+					? 16
+					: event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+						? canvas.clientHeight
+						: 1;
+
+			viewport = panViewport(viewport, {
+				x: -event.deltaX * deltaMultiplier,
+				y: -event.deltaY * deltaMultiplier
+			});
+			return;
+		}
+
+		const zoomMultiplier = Math.exp(-event.deltaY * 0.0008 * pinchZoomSensitivity);
 		viewport = zoomViewportAtPoint(viewport, screenPoint, viewport.zoom * zoomMultiplier);
+	}
+
+	type SafariGestureEvent = Event & { clientX: number; clientY: number; scale: number };
+
+	function isSafariGestureEvent(event: Event): event is SafariGestureEvent {
+		return 'scale' in event && typeof event.scale === 'number';
+	}
+
+	function handleGestureStart(event: Event) {
+		if (!isSafariGestureEvent(event)) {
+			return;
+		}
+
+		event.preventDefault();
+		lastGestureScale = event.scale;
+	}
+
+	function handleGestureChange(event: Event) {
+		if (!isSafariGestureEvent(event)) {
+			return;
+		}
+
+		event.preventDefault();
+
+		if (lastGestureScale <= 0 || event.scale <= 0) {
+			return;
+		}
+
+		const rect = canvas.getBoundingClientRect();
+		const scaleChange = event.scale / lastGestureScale;
+		viewport = zoomViewportAtPoint(
+			viewport,
+			{
+				x: event.clientX - rect.left,
+				y: event.clientY - rect.top
+			},
+			viewport.zoom * scaleChange ** pinchZoomSensitivity
+		);
+		lastGestureScale = event.scale;
+	}
+
+	function handleGestureEnd(event: Event) {
+		if (isSafariGestureEvent(event)) {
+			event.preventDefault();
+		}
+
+		lastGestureScale = 1;
 	}
 
 	function updateDocumentDimension(field: 'width' | 'height', event: Event) {
@@ -961,6 +1030,10 @@
 		}
 
 		viewport = zoomViewportAtPoint(viewport, canvasCenterPoint(), value / 100);
+	}
+
+	function adjustZoom(multiplier: number) {
+		viewport = zoomViewportAtPoint(viewport, canvasCenterPoint(), viewport.zoom * multiplier);
 	}
 
 	function fitCanvasToDocument() {
@@ -1838,45 +1911,41 @@
 	}
 
 	function handleLayerSortStart(event: DragStartEvent) {
-		if (!isSortable(event.operation.source)) {
+		const source = event.operation.source;
+
+		if (!source) {
 			return;
 		}
 
-		layerDragNodeId = String(event.operation.source.id);
+		const sourceId = String(source.id);
+
+		if (!layerItems.some((item) => item.node.id === sourceId)) {
+			return;
+		}
+
+		layerDropIntent = undefined;
 		layerDragStartProject = cloneProject(project);
 	}
 
 	function handleLayerSortOver(event: DragOverEvent) {
-		const { source, target } = event.operation;
+		layerDropIntent = resolveLayerDropIntent(event.operation);
+	}
 
-		if (!isSortable(source) || !isSortable(target) || source.id === target.id) {
-			return;
-		}
-
-		const sourceItem = visibleLayerItems.find((item) => item.node.id === source.id);
-		const targetItem = visibleLayerItems.find((item) => item.node.id === target.id);
-
-		if (!sourceItem || !targetItem) {
-			return;
-		}
-
-		moveLayer(sourceItem, targetItem);
+	function handleLayerSortMove(event: DragMoveEvent) {
+		layerDropIntent = resolveLayerDropIntent(event.operation);
 	}
 
 	function handleLayerSortEnd(event: DragEndEvent) {
 		const startProject = layerDragStartProject;
+		const dropIntent = resolveLayerDropIntent(event.operation);
 		layerDragStartProject = undefined;
-		layerDragNodeId = undefined;
+		layerDropIntent = undefined;
 
-		if (!startProject) {
+		if (!startProject || event.canceled || !dropIntent) {
 			return;
 		}
 
-		if (event.canceled) {
-			project = startProject;
-			markProjectChanged();
-			return;
-		}
+		applyLayerDropIntent(dropIntent);
 
 		if (projectsEqual(project, startProject)) {
 			return;
@@ -1886,64 +1955,142 @@
 		redoStack = [];
 	}
 
-	function moveLayer(sourceItem: LayerItem, targetItem: LayerItem) {
-		if (targetItem.node.type === 'group' && targetItem.node.id !== sourceItem.parentId) {
-			moveLayerIntoGroup(sourceItem, targetItem.node.id);
-			return;
+	type LayerDropData = { kind: 'layer-row'; nodeId: NodeId };
+
+	function resolveLayerDropIntent(operation: LayerDragOperation): LayerDropIntent | undefined {
+		const source = operation.source;
+		const target = operation.target;
+
+		if (!source || !target || !isLayerDropData(target.data)) {
+			return undefined;
 		}
 
-		if (sourceItem.parentId === targetItem.parentId) {
-			reorderLayer(sourceItem, targetItem);
-			return;
+		const sourceId = String(source.id);
+		const sourceItem = layerItems.find((item) => item.node.id === sourceId);
+		const targetItem = layerItems.find((item) => item.node.id === target.data.nodeId);
+		const position = layerDropPosition(operation, targetItem);
+
+		if (!sourceItem || !targetItem || !position || !canCreateLayerDropIntent(sourceItem, targetItem, position)) {
+			return undefined;
 		}
 
-		moveLayerToParent(sourceItem, targetItem.parentId, targetItem.astIndex);
+		return {
+			sourceId,
+			targetId: target.data.nodeId,
+			position
+		};
 	}
 
-	function reorderLayer(sourceItem: LayerItem, targetItem: LayerItem) {
-		if (sourceItem.astIndex === targetItem.astIndex) {
-			return;
+	function layerDropPosition(
+		operation: LayerDragOperation,
+		targetItem: LayerItem | undefined
+	): LayerDropPosition | undefined {
+		const targetBounds = operation.target?.element?.getBoundingClientRect();
+
+		if (!targetItem || !targetBounds || targetBounds.height <= 0) {
+			return undefined;
 		}
 
-		updateActiveDocument(
-			reorderChildren(
-				geometryDocument,
-				sourceItem.parentId,
-				sourceItem.astIndex,
-				targetItem.astIndex
-			)
+		const pointerRatio = Math.max(
+			0,
+			Math.min(1, (operation.position.current.y - targetBounds.top) / targetBounds.height)
+		);
+
+		if (targetItem.node.type !== 'group') {
+			return pointerRatio < 0.5 ? 'before' : 'after';
+		}
+
+		if (pointerRatio < 0.25) {
+			return 'before';
+		}
+
+		if (pointerRatio > 0.75) {
+			return 'after';
+		}
+
+		return 'inside';
+	}
+
+	function isLayerDropData(value: unknown): value is LayerDropData {
+		if (!value || typeof value !== 'object') {
+			return false;
+		}
+
+		const data = value as Partial<LayerDropData>;
+
+		return (
+			data.kind === 'layer-row' &&
+			typeof data.nodeId === 'string'
 		);
 	}
 
-	function moveLayerIntoGroup(sourceItem: LayerItem, targetParentId: NodeId) {
-		const targetParent = findNode(geometryDocument, targetParentId);
-
-		if (
-			!targetParent ||
-			targetParent.type !== 'group' ||
-			!canMoveLayerToParent(sourceItem.node.id, targetParentId)
-		) {
-			return;
+	function canCreateLayerDropIntent(
+		sourceItem: LayerItem,
+		targetItem: LayerItem,
+		position: LayerDropPosition
+	) {
+		if (sourceItem.node.id === targetItem.node.id) {
+			return false;
 		}
 
-		updateActiveDocument(
-			moveNodeToParent(
-				geometryDocument,
-				sourceItem.node.id,
-				targetParentId,
-				targetParent.children.length
-			)
-		);
-		expandedGroupIds = [...new Set([...expandedGroupIds, targetParentId])];
+		if (position === 'inside') {
+			return (
+				targetItem.node.type === 'group' &&
+				targetItem.node.id !== sourceItem.parentId &&
+				canMoveLayerToParent(sourceItem.node.id, targetItem.node.id)
+			);
+		}
+
+		// An insertion line always belongs to the target row's parent. Its visual
+		// indentation therefore communicates the exact destination group, whether
+		// this is a sibling reorder or a cross-group move.
+		return canMoveLayerToParent(sourceItem.node.id, targetItem.parentId);
 	}
 
-	function moveLayerToParent(sourceItem: LayerItem, targetParentId: NodeId, targetIndex: number) {
-		if (!canMoveLayerToParent(sourceItem.node.id, targetParentId)) {
+	function applyLayerDropIntent(intent: LayerDropIntent) {
+		const sourceItem = layerItems.find((item) => item.node.id === intent.sourceId);
+		const targetItem = layerItems.find((item) => item.node.id === intent.targetId);
+
+		if (!sourceItem || !targetItem || !canCreateLayerDropIntent(sourceItem, targetItem, intent.position)) {
 			return;
 		}
 
+		if (intent.position === 'inside') {
+			const targetParent = findNode(geometryDocument, targetItem.node.id);
+
+			if (!targetParent || targetParent.type !== 'group') {
+				return;
+			}
+
+			updateActiveDocument(
+				moveNodeToParent(
+					geometryDocument,
+					sourceItem.node.id,
+					targetParent.id,
+					targetParent.children.length
+				)
+			);
+			return;
+		}
+
+		const targetParent = findNode(geometryDocument, targetItem.parentId);
+
+		if (!targetParent || targetParent.type !== 'group') {
+			return;
+		}
+
+		const siblingsWithoutSource = targetParent.children.filter(
+			(child) => child.id !== sourceItem.node.id
+		);
+		const targetIndex = siblingsWithoutSource.findIndex((child) => child.id === targetItem.node.id);
+
+		if (targetIndex < 0) {
+			return;
+		}
+
+		const insertIndex = intent.position === 'before' ? targetIndex + 1 : targetIndex;
 		updateActiveDocument(
-			moveNodeToParent(geometryDocument, sourceItem.node.id, targetParentId, targetIndex)
+			moveNodeToParent(geometryDocument, sourceItem.node.id, targetParent.id, insertIndex)
 		);
 	}
 
@@ -3156,7 +3303,7 @@
 
 		renderDocument(context, geometryDocument, viewport, {
 			selectedNodeIds,
-			background: uiColors.workbench,
+			transparentBackground: true,
 			pixelRatio: canvasPixelRatio,
 			showEditHandles: selectedNodeIds.length > 0
 		});
@@ -3649,57 +3796,60 @@
 
 <div class="app-shell">
 	<header class="topbar">
-		<div class="topbar-brand">
-			<img alt="" aria-hidden="true" class="brand-mark" src={iconPaths.app} />
-		</div>
+		<div class="topbar-project-group">
+			<div class="topbar-brand">
+				<img alt="" aria-hidden="true" class="brand-mark" src={iconPaths.app} />
+			</div>
 
-		<div class="history-controls" aria-label="History">
-			<button
-				aria-label="Undo"
-				title="Undo"
-				type="button"
-				onclick={undo}
-				disabled={undoStack.length === 0}
-			>
-				<img alt="" aria-hidden="true" src={iconPaths.undo} />
-			</button>
-			<button
-				aria-label="Redo"
-				title="Redo"
-				type="button"
-				onclick={redo}
-				disabled={redoStack.length === 0}
-			>
-				<img alt="" aria-hidden="true" src={iconPaths.redo} />
-			</button>
-		</div>
-
-		<div class="project-name-shell">
-			{#if renamingProjectName}
-				<input
-					bind:this={projectNameInput}
-					class="project-name-input"
-					type="text"
-					value={projectNameDraft}
-					oninput={(event) => (projectNameDraft = event.currentTarget.value)}
-					onblur={confirmProjectNameRename}
-					onkeydown={handleProjectNameKeyDown}
-				/>
-			{:else}
+			<div class="history-controls" aria-label="History">
 				<button
-					aria-label="Rename project"
-					class="project-name-display"
-					title="Rename project"
+					aria-label="Undo"
+					title="Undo"
 					type="button"
-					onclick={startProjectNameRename}
+					onclick={undo}
+					disabled={undoStack.length === 0}
 				>
-					<h1>{project.name}</h1>
-					<img alt="" aria-hidden="true" src={iconPaths.edit} />
+					<img alt="" aria-hidden="true" src={iconPaths.undo} />
 				</button>
-			{/if}
+				<button
+					aria-label="Redo"
+					title="Redo"
+					type="button"
+					onclick={redo}
+					disabled={redoStack.length === 0}
+				>
+					<img alt="" aria-hidden="true" src={iconPaths.redo} />
+				</button>
+			</div>
+
+			<div class="project-name-shell">
+				{#if renamingProjectName}
+					<input
+						bind:this={projectNameInput}
+						class="project-name-input"
+						type="text"
+						value={projectNameDraft}
+						oninput={(event) => (projectNameDraft = event.currentTarget.value)}
+						onblur={confirmProjectNameRename}
+						onkeydown={handleProjectNameKeyDown}
+					/>
+				{:else}
+					<button
+						aria-label="Rename project"
+						class="project-name-display"
+						title="Rename project"
+						type="button"
+						onclick={startProjectNameRename}
+					>
+						<h1>{project.name}</h1>
+						<img alt="" aria-hidden="true" src={iconPaths.edit} />
+					</button>
+				{/if}
+			</div>
 		</div>
 
-		<div class="topbar-status">
+		<div class="topbar-actions-group">
+			<div class="topbar-status">
 			<div class="export-menu">
 				<input
 					bind:this={svgImportInput}
@@ -3769,7 +3919,8 @@
 				{/if}
 			</div>
 			<button type="button" onclick={downloadProject}>Export Project</button>
-			<button type="button" onclick={openProjectSettings}>Settings</button>
+				<button type="button" onclick={openProjectSettings}>Settings</button>
+			</div>
 		</div>
 	</header>
 
@@ -3778,6 +3929,7 @@
 			<h2 class="sidebar-title">Layers</h2>
 			<DragDropProvider
 				onDragStart={handleLayerSortStart}
+				onDragMove={handleLayerSortMove}
 				onDragOver={handleLayerSortOver}
 				onDragEnd={handleLayerSortEnd}
 			>
@@ -3786,10 +3938,13 @@
 						<div class="empty-row">No nodes</div>
 					{/if}
 
-					{#each visibleLayerItems as item (item.node.id)}
+					{#each layerItems as item (item.node.id)}
 						<LayerRow
 							{item}
 							selected={selectedNodeIds.includes(item.node.id)}
+							dropPosition={layerDropIntent?.targetId === item.node.id
+								? layerDropIntent.position
+								: undefined}
 							onContextMenu={openLayerContextMenu}
 							onEditGroup={editGroup}
 							onSelect={selectNode}
@@ -3924,6 +4079,25 @@
 					>
 						<img alt="" aria-hidden="true" src={iconPaths.basis} />
 					</button>
+				</div>
+				<div class="zoom-control" aria-label="Canvas zoom">
+					<button aria-label="Zoom out" title="Zoom out" type="button" onclick={() => adjustZoom(1 / 1.2)}
+						>−</button
+					>
+					<input
+						aria-label="Zoom percentage"
+						min="10"
+						max="6400"
+						step="1"
+						type="number"
+						value={Math.round(viewport.zoom * 100)}
+						onchange={updateZoomPercent}
+					/>
+					<span>%</span>
+					<button aria-label="Zoom in" title="Zoom in" type="button" onclick={() => adjustZoom(1.2)}
+						>+</button
+					>
+					<button class="zoom-fit-button" type="button" onclick={fitCanvasToDocument}>Fit</button>
 				</div>
 				<canvas
 					class:panning
@@ -4125,8 +4299,34 @@
 			{/if}
 		</div>
 
-		<aside class="inspector">
-			<details class="inspector-section" open>
+		<aside
+			class="inspector"
+			class:selectionActive={selectedNodeIds.length === 1}
+			class:multiSelection={selectedNodeIds.length > 1}
+		>
+			<div class="inspector-header">
+				<div>
+					<span class="inspector-eyebrow">Inspector</span>
+					<strong>
+						{selectedNodeIds.length > 1
+							? `${selectedNodeIds.length} selected`
+							: selectedNode
+								? selectedNode.name || selectedNode.type
+								: activePage.name || 'Document'}
+					</strong>
+				</div>
+				{#if selectedNode && selectedNodeIds.length === 1}
+					<span class="inspector-node-type">{selectedNode.type}</span>
+				{/if}
+			</div>
+
+			{#if selectedNodeIds.length > 1}
+				<div class="multi-selection-summary">
+					Select a single layer to edit its appearance, transform, and geometry.
+				</div>
+			{/if}
+
+			<details class="inspector-section document-section" open>
 				<summary>
 					<span>Page Settings</span>
 					<svg
@@ -4186,8 +4386,12 @@
 						/>
 						<span>px</span>
 					</div>
+				</div>
 
-					<label for="document-viewbox-x">ViewBox X</label>
+				<details class="document-advanced">
+					<summary>Advanced</summary>
+					<div class="field-grid">
+						<label for="document-viewbox-x">ViewBox X</label>
 					<div class="number-field">
 						<input
 							id="document-viewbox-x"
@@ -4232,10 +4436,11 @@
 							onchange={(event) => updateDocumentViewBox('height', event)}
 						/>
 					</div>
-				</div>
+					</div>
+				</details>
 			</details>
 
-			<details class="inspector-section" open>
+			<details class="inspector-section selection-section">
 				<summary>
 					<span>Composition</span>
 					<svg
@@ -4299,7 +4504,7 @@
 				{/if}
 			</details>
 
-			<details class="inspector-section" open>
+			<details class="inspector-section selection-section" open>
 				<summary>
 					<span>Transform</span>
 					<svg
@@ -4411,7 +4616,11 @@
 				{/if}
 			</details>
 
-			<details class="inspector-section" open>
+			<details
+				class="inspector-section selection-section text-section"
+				class:textUnavailable={selectedNode?.type !== 'text'}
+				open
+			>
 				<summary>
 					<span>Text</span>
 					<svg
@@ -4510,7 +4719,7 @@
 				{/if}
 			</details>
 
-			<details class="inspector-section" open>
+			<details class="inspector-section document-section" open>
 				<summary>
 					<span>Page Background</span>
 					<svg
@@ -4548,62 +4757,10 @@
 				</div>
 			</details>
 
-			<details class="inspector-section" open>
-				<summary>
-					<span>Zoom Settings</span>
-					<svg
-						aria-hidden="true"
-						class="section-chevron"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-						stroke-width="1.5"
-					>
-						<path
-							class="section-chevron-closed"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="m8.25 4.5 7.5 7.5-7.5 7.5"
-						/>
-						<path
-							class="section-chevron-open"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="m19.5 8.25-7.5 7.5-7.5-7.5"
-						/>
-					</svg>
-				</summary>
-				<div class="field-grid compact">
-					<label for="zoom-percent">Scale</label>
-					<div class="zoom-row">
-						<div class="number-field">
-							<input
-								id="zoom-percent"
-								min="10"
-								max="6400"
-								step="1"
-								type="number"
-								value={Math.round(viewport.zoom * 100)}
-								onchange={updateZoomPercent}
-							/>
-							<span>%</span>
-						</div>
-						<button
-							class="secondary-button fit-button"
-							type="button"
-							title="Actual Size"
-							onclick={setActualSizeZoom}
-						>
-							100%
-						</button>
-						<button class="secondary-button fit-button" type="button" onclick={fitCanvasToDocument}
-							>Fit</button
-						>
-					</div>
-				</div>
-			</details>
-
-			<details class="inspector-section" open>
+			<details
+				class="inspector-section selection-section geometry-section"
+				class:geometryUnavailable={selectedNode?.type === 'group'}
+			>
 				<summary>
 					<span>Geometry</span>
 					<svg
@@ -4844,7 +5001,7 @@
 				{/if}
 			</details>
 
-			<details class="inspector-section" open>
+			<details class="inspector-section selection-section" open>
 				<summary>
 					<span>Appearance</span>
 					<svg

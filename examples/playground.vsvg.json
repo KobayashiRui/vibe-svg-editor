@@ -29,98 +29,178 @@
           "name": "Root",
           "children": [
             {
-              "id": "playground-card",
-              "type": "rect",
-              "name": "Rounded Card",
-              "x": 64,
-              "y": 64,
-              "width": 384,
-              "height": 320,
-              "rx": 40,
-              "ry": 40,
-              "style": {
-                "fill": "#0f172a",
-                "stroke": "#1d4ed8",
-                "strokeWidth": 4
-              }
-            },
-            {
-              "id": "playground-orbit",
-              "type": "ellipse",
-              "name": "Orbit",
-              "cx": 256,
-              "cy": 224,
-              "rx": 132,
-              "ry": 72,
-              "style": {
-                "fill": "none",
-                "stroke": "#f8fafc",
-                "strokeWidth": 16,
-                "strokeLinecap": "round"
-              }
-            },
-            {
-              "id": "playground-circle",
-              "type": "circle",
-              "name": "Circle",
-              "cx": 256,
-              "cy": 248,
-              "r": 72,
-              "style": {
-                "fill": "#2563eb",
-                "stroke": "none"
-              }
-            },
-            {
-              "id": "playground-curve",
-              "type": "path",
-              "name": "Cubic Curve",
-              "start": {
-                "x": 128,
-                "y": 224
-              },
-              "closed": false,
-              "segments": [
+              "id": "playground-artwork-group",
+              "type": "group",
+              "name": "Artwork",
+              "children": [
                 {
-                  "type": "cubic",
-                  "control1": {
-                    "x": 184,
-                    "y": 128
-                  },
-                  "control2": {
-                    "x": 336,
-                    "y": 328
-                  },
-                  "to": {
-                    "x": 392,
-                    "y": 216
+                  "id": "playground-card",
+                  "type": "rect",
+                  "name": "Rounded Card",
+                  "x": 63.849,
+                  "y": 63.907,
+                  "width": 384,
+                  "height": 320,
+                  "rx": 40,
+                  "ry": 40,
+                  "style": {
+                    "fill": "#0f172a",
+                    "stroke": "#1d4ed8",
+                    "strokeWidth": 4
                   }
+                },
+                {
+                  "id": "playground-orbit-system-group",
+                  "type": "group",
+                  "name": "Orbit System",
+                  "children": [
+                    {
+                      "id": "playground-circle",
+                      "type": "circle",
+                      "name": "Circle",
+                      "cx": 255.849,
+                      "cy": 247.835,
+                      "r": 72,
+                      "style": {
+                        "fill": {
+                          "type": "gradient",
+                          "gradientId": "playground-circle-fill-gradient"
+                        },
+                        "stroke": "none"
+                      }
+                    },
+                    {
+                      "id": "playground-orbit",
+                      "type": "ellipse",
+                      "name": "Orbit",
+                      "cx": 255.849,
+                      "cy": 223.907,
+                      "rx": 132,
+                      "ry": 72,
+                      "style": {
+                        "fill": "none",
+                        "stroke": "#f8fafc",
+                        "strokeWidth": 16,
+                        "strokeLinecap": "round"
+                      }
+                    },
+                    {
+                      "id": "playground-curve",
+                      "type": "path",
+                      "name": "Cubic Curve",
+                      "start": {
+                        "x": 127.751,
+                        "y": 223.809
+                      },
+                      "closed": false,
+                      "segments": [
+                        {
+                          "type": "cubic",
+                          "control1": {
+                            "x": 183.751,
+                            "y": 127.809
+                          },
+                          "control2": {
+                            "x": 330.763,
+                            "y": 334.631
+                          },
+                          "to": {
+                            "x": 386.763,
+                            "y": 222.631
+                          }
+                        }
+                      ],
+                      "style": {
+                        "fill": "none",
+                        "stroke": "#ffffff",
+                        "strokeWidth": 18,
+                        "strokeLinecap": "round",
+                        "strokeLinejoin": "round"
+                      }
+                    }
+                  ]
                 }
-              ],
-              "style": {
-                "fill": "none",
-                "stroke": "#ffffff",
-                "strokeWidth": 18,
-                "strokeLinecap": "round",
-                "strokeLinejoin": "round"
-              }
+              ]
             },
             {
-              "id": "playground-text",
-              "type": "text",
-              "name": "Multiline Text",
-              "x": 96,
-              "y": 430,
-              "text": "VibeSVG\nPlayground",
-              "fill": "#111827",
-              "fontFamily": "Inter, system-ui, sans-serif",
-              "fontSize": 32,
-              "fontWeight": "700",
-              "textAnchor": "start"
+              "id": "playground-labels-group",
+              "type": "group",
+              "name": "Labels",
+              "children": [
+                {
+                  "id": "playground-text",
+                  "type": "text",
+                  "name": "Multiline Text",
+                  "x": 96,
+                  "y": 430,
+                  "text": "VibeSVG\nPlayground",
+                  "fill": "#111827",
+                  "fontFamily": "Inter, system-ui, sans-serif",
+                  "fontSize": 32,
+                  "fontWeight": "700",
+                  "textAnchor": "start"
+                }
+              ]
             }
           ]
         },
-        "comments": []
+        "comments": [],
+        "resources": {
+          "gradients": [
+            {
+              "id": "playground-curve-fill-gradient",
+              "type": "radial",
+              "cx": 256,
+              "cy": 256,
+              "r": 256,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#3dbbff"
+                },
+                {
+                  "offset": 1,
+                  "color": "#2563ff"
+                }
+              ]
+            },
+            {
+              "id": "playground-orbit-fill-gradient",
+              "type": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 512,
+              "y2": 512,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#3dbbff"
+                },
+                {
+                  "offset": 1,
+                  "color": "#2563ff"
+                }
+              ]
+            },
+            {
+              "id": "playground-circle-fill-gradient",
+              "type": "radial",
+              "cx": 256,
+              "cy": 256,
+              "r": 256,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#3dbbff"
+                },
+                {
+                  "offset": 1,
+                  "color": "#2563ff"
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
@@ -190,5 +270,5 @@
     }
   ],
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-01-01T00:00:00.000Z"
+  "updatedAt": "2026-08-29T07:27:00.667Z"
 }
